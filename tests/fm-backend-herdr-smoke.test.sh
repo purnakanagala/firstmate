@@ -282,14 +282,20 @@ pass "real herdr: current_path reads the pane's live cwd"
 
 # --- busy_state on a real claude harness (verified in herdr-verification-p2.md) ---
 
-assert_no_live_provider_processes() {
-  local live
-  live=$(pgrep -af '(^|/)(claude|grok)([[:space:]]|$)' 2>/dev/null || true)
-  [ -z "$live" ] || fail "live provider process detected: $live"
+assert_no_target_provider_processes() {
+  local info live
+  info=$(fm_backend_herdr_cli "$SESSION" pane process-info --pane "$PANE_ID" 2>/dev/null) \
+    || fail "could not inspect the test-owned Herdr pane process tree"
+  live=$(printf '%s' "$info" | jq -r '
+    .result.process_info.foreground_processes[]?
+    | select(any(([(.name // "")] + (.argv // []))[]; test("(^|/)(claude|grok)$")))
+    | "\(.pid) \(.name) \((.argv // []) | join(" "))"
+  ')
+  [ -z "$live" ] || fail "test-owned provider process detected: $live"
 }
 
 if [ "${FM_HERDR_SMOKE_REAL_CLAUDE:-0}" = 1 ] && command -v claude >/dev/null 2>&1; then
-  assert_no_live_provider_processes
+  assert_no_target_provider_processes
   fm_backend_herdr_send_literal "$TARGET" "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions --print 'say the word HERDRSMOKEOK and nothing else'"
   sleep 0.2
   fm_backend_herdr_send_key "$TARGET" Enter
@@ -312,7 +318,7 @@ if [ "${FM_HERDR_SMOKE_REAL_CLAUDE:-0}" = 1 ] && command -v claude >/dev/null 2>
     *HERDRSMOKEOK*) pass "real herdr: agent_status busy/idle detection tracks a real claude turn, and capture shows its output" ;;
     *) echo "note: claude output marker not observed within the bound (timing-dependent, not fatal to this smoke suite)" >&2 ;;
   esac
-  assert_no_live_provider_processes
+  assert_no_target_provider_processes
 elif [ "${FM_HERDR_SMOKE_REAL_CLAUDE:-0}" != 1 ]; then
   echo "note: FM_HERDR_SMOKE_REAL_CLAUDE=1 not set; skipping the real-agent busy_state check" >&2
 else
