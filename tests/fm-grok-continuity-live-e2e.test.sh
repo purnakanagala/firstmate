@@ -115,6 +115,10 @@ pane=$(capture)
 if printf '%s\n' "$pane" | grep -Fq 'bin/fm-watch-arm.sh &'; then
   fail "Grok used a shell ampersand instead of its tracked background task"
 fi
+"$TMUX" -L "$SOCKET" send-keys -t "$SESSION" -l '/exit'
+sleep 1.2
+"$TMUX" -L "$SOCKET" send-keys -t "$SESSION" Enter
+wait_for_text "GROK_EXIT=0" 40 || fail "Grok did not exit cleanly"
 assert_no_live_provider_processes
 
 printf 'ok - %s live E2E preserved tracked background completion and shared ledger classification\n' "$GROK_VERSION"
