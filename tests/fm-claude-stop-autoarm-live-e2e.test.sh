@@ -37,9 +37,10 @@ CLAUDE_IDENTITY=
 
 claude_pid_is_owned() {
   local identity parent
-  [ -n "$CLAUDE_PID" ] && [ -n "$CLAUDE_IDENTITY" ] || return 1
+  [ -n "$CLAUDE_PID" ] || return 1
   parent=$(ps -p "$CLAUDE_PID" -o ppid= 2>/dev/null | tr -d '[:space:]' || true)
   [ "$parent" = "$$" ] || return 1
+  [ -n "$CLAUDE_IDENTITY" ] || return 0
   identity=$(ps -p "$CLAUDE_PID" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
   [ "$identity" = "$CLAUDE_IDENTITY" ]
 }
