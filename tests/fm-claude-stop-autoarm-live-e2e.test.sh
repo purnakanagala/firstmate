@@ -36,19 +36,20 @@ CLAUDE_PID=
 CLAUDE_IDENTITY=
 
 claude_pid_is_owned() {
-  local identity parent
-  [ -n "$CLAUDE_PID" ] || return 1
-  parent=$(ps -p "$CLAUDE_PID" -o ppid= 2>/dev/null | tr -d '[:space:]' || true)
+  local pid=${1:-$CLAUDE_PID} identity parent
+  [ -n "$pid" ] || return 1
+  parent=$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d '[:space:]' || true)
   [ "$parent" = "$$" ] || return 1
   [ -n "$CLAUDE_IDENTITY" ] || return 0
-  identity=$(ps -p "$CLAUDE_PID" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+  identity=$(ps -p "$pid" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
   [ "$identity" = "$CLAUDE_IDENTITY" ]
 }
 
 cleanup() {
-  if kill -0 "${CLAUDE_PID:-}" 2>/dev/null && claude_pid_is_owned; then
-    kill -TERM "$CLAUDE_PID" 2>/dev/null || true
-    wait "$CLAUDE_PID" 2>/dev/null || true
+  local pid=${CLAUDE_PID:-${!:-}}
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && claude_pid_is_owned "$pid"; then
+    kill -TERM "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
   fi
   rm -rf "$LAB"
 }
