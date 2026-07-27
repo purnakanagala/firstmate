@@ -32,8 +32,23 @@ HOME_DIR="$LAB/fmhome"
 LIVE_OWNER_HOME="$LAB/live-owner-home"
 TRANSCRIPT="$LAB/claude.jsonl"
 CLAUDE_VERSION=$(claude --version)
+CLAUDE_PID=
+CLAUDE_IDENTITY=
+
+claude_pid_is_owned() {
+  local identity parent
+  [ -n "$CLAUDE_PID" ] && [ -n "$CLAUDE_IDENTITY" ] || return 1
+  parent=$(ps -p "$CLAUDE_PID" -o ppid= 2>/dev/null | tr -d '[:space:]' || true)
+  [ "$parent" = "$$" ] || return 1
+  identity=$(ps -p "$CLAUDE_PID" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+  [ "$identity" = "$CLAUDE_IDENTITY" ]
+}
 
 cleanup() {
+  if kill -0 "${CLAUDE_PID:-}" 2>/dev/null && claude_pid_is_owned; then
+    kill -TERM "$CLAUDE_PID" 2>/dev/null || true
+    wait "$CLAUDE_PID" 2>/dev/null || true
+  fi
   rm -rf "$LAB"
 }
 trap cleanup EXIT
@@ -115,6 +130,7 @@ PROMPT='Run exactly `bin/fm-session-start.sh` with Bash as your first tool call.
     claude -p "$PROMPT" --dangerously-skip-permissions --effort low --output-format stream-json --verbose
 ) > "$TRANSCRIPT" 2>&1 &
 CLAUDE_PID=$!
+CLAUDE_IDENTITY=$(ps -p "$CLAUDE_PID" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
 wait "$CLAUDE_PID"
 CLAUDE_RC=$?
 [ "$CLAUDE_RC" -eq 0 ] || fail "Claude credentialed auto-arm session failed: $(tail -20 "$TRANSCRIPT")"
