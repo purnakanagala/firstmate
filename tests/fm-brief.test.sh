@@ -20,10 +20,10 @@ mkdir -p "$BRIEF_HOME/data"
 
 # The script itself must always parse. This is the direct regression test for
 # issue #166: a stray apostrophe in any of the three DOD heredoc bodies
-# (no-mistakes/direct-PR/local-only) breaks `bash -n` on the whole file.
+# (no-mistakes/direct-PR/local-only) breaks `/bin/bash -n` on the whole file.
 test_script_parses() {
   local out rc
-  out=$(bash -n "$ROOT/bin/fm-brief.sh" 2>&1); rc=$?
+  out=$(/bin/bash -n "$ROOT/bin/fm-brief.sh" 2>&1); rc=$?
   expect_code 0 "$rc" "bash -n bin/fm-brief.sh must parse cleanly (got: $out)"
   [ -z "$out" ] || fail "bash -n bin/fm-brief.sh emitted unexpected output: $out"
   pass "fm-brief.sh: bash -n succeeds"
@@ -108,6 +108,8 @@ test_no_mistakes_dod_wording() {
   assert_present "$brief" "brief was not scaffolded"
   assert_grep "no-mistakes itself provides for the mechanics" "$brief" \
     "no-mistakes DOD lost its guidance-reference sentence"
+  assert_grep "the firstmate authority check" "$brief" \
+    "no-mistakes DOD must keep the authority-check line without the apostrophe regression"
   # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
   assert_grep '`no-mistakes axi run --help`' "$brief" \
     "no-mistakes DOD must render literal backticks around the help command"

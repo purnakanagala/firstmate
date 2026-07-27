@@ -15,6 +15,12 @@ fail() {
   exit 1
 }
 
+assert_no_live_provider_processes() {
+  local live
+  live=$(pgrep -af '(^|/)(claude|grok)([[:space:]]|$)' 2>/dev/null || true)
+  [ -z "$live" ] || fail "live provider process detected: $live"
+}
+
 command -v grok >/dev/null 2>&1 || fail "grok not found"
 command -v tmux >/dev/null 2>&1 || fail "tmux not found"
 
@@ -72,6 +78,7 @@ cp "$ROOT/bin/fm-watch-arm.sh" "$PROJECT/bin/fm-watch-arm.sh"
 mkdir -p "$HOME_DIR/state" "$HOME_DIR/config"
 printf 'project=fixture\n' > "$HOME_DIR/state/grok-e2e.meta"
 
+assert_no_live_provider_processes
 "$TMUX" -L "$SOCKET" new-session -d -s "$SESSION" -c "$PROJECT" \
   "env FM_HOME='$HOME_DIR' FM_ROOT_OVERRIDE='$PROJECT' FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 bash -lc 'printf \"%s\\n\" \"\$\$\" > \"\$FM_HOME/state/.lock\"; grok --trust --always-approve --reasoning-effort low; rc=\$?; printf \"GROK_EXIT=%s\\n\" \"\$rc\"; sleep 300'"
 
@@ -108,5 +115,6 @@ pane=$(capture)
 if printf '%s\n' "$pane" | grep -Fq 'bin/fm-watch-arm.sh &'; then
   fail "Grok used a shell ampersand instead of its tracked background task"
 fi
+assert_no_live_provider_processes
 
 printf 'ok - %s live E2E preserved tracked background completion and shared ledger classification\n' "$GROK_VERSION"

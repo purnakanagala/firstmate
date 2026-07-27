@@ -26,6 +26,12 @@ fail() {
 
 command -v claude >/dev/null 2>&1 || fail "claude not found"
 
+assert_no_live_provider_processes() {
+  local live
+  live=$(pgrep -af '(^|/)(claude|grok)([[:space:]]|$)' 2>/dev/null || true)
+  [ -z "$live" ] || fail "live provider process detected: $live"
+}
+
 LAB="$ROOT/.claude-autoarm-live-e2e.$$"
 PROJECT="$LAB/project"
 HOME_DIR="$LAB/fmhome"
@@ -109,11 +115,13 @@ chmod +x "$PROJECT/bin/fm-watch-arm.sh" "$PROJECT/bin/fm-wake-drain.sh"
 
 PROMPT='Run exactly `bin/fm-session-start.sh` with Bash as your first tool call. After reading its complete digest, reply with exactly CYCLE0 and stop. Whenever a Stop hook feedback message wakes you, run exactly `bin/fm-wake-drain.sh` once with Bash, then reply with exactly ACK and stop. Never run bin/fm-watch-arm.sh or any other arm command, and never use any other tool.'
 
+assert_no_live_provider_processes
 (
   cd "$PROJECT" || exit 1
   FM_HOME="$HOME_DIR" CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false \
     claude -p "$PROMPT" --dangerously-skip-permissions --effort low --output-format stream-json --verbose
 ) > "$TRANSCRIPT" 2>&1 || fail "Claude credentialed auto-arm session failed: $(tail -20 "$TRANSCRIPT")"
+assert_no_live_provider_processes
 
 ARM_RUNS=$(wc -l < "$HOME_DIR/state/arm-ran" 2>/dev/null | tr -d ' ')
 [ "$ARM_RUNS" = 2 ] || fail "expected exactly 2 hook-owned arm cycles, got $ARM_RUNS: $(cat "$HOME_DIR/state/arm-ran" 2>/dev/null)"
