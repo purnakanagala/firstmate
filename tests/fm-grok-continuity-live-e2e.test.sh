@@ -15,6 +15,38 @@ fail() {
   exit 1
 }
 
+assert_no_provider_descendants() {
+  local root_pid=$1 live
+  live=$(ps -axo pid=,ppid=,command= 2>/dev/null | awk -v root="$root_pid" '
+    {
+      pid = $1
+      parent[pid] = $2
+      $1 = ""
+      $2 = ""
+      process[pid] = $0
+    }
+    END {
+      generation = 0
+      for (pid in parent) {
+        if (pid == root) {
+          continue
+        }
+        generation++
+        current = pid
+        while (current in parent && current != root && seen[current] != generation) {
+          seen[current] = generation
+          current = parent[current]
+        }
+        if (current == root && process[pid] ~ /(^|[[:space:]])([^[:space:]]*\/)?(claude|grok)([[:space:]]|$)/) {
+          sub(/^[[:space:]]+/, "", process[pid])
+          print pid " " process[pid]
+        }
+      }
+    }
+  ')
+  [ -z "$live" ] || fail "test-owned provider process detected: $live"
+}
+
 command -v grok >/dev/null 2>&1 || fail "grok not found"
 command -v tmux >/dev/null 2>&1 || fail "tmux not found"
 
@@ -74,6 +106,10 @@ printf 'project=fixture\n' > "$HOME_DIR/state/grok-e2e.meta"
 
 "$TMUX" -L "$SOCKET" new-session -d -s "$SESSION" -c "$PROJECT" \
   "env FM_HOME='$HOME_DIR' FM_ROOT_OVERRIDE='$PROJECT' FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 bash -lc 'printf \"%s\\n\" \"\$\$\" > \"\$FM_HOME/state/.lock\"; grok --trust --always-approve --reasoning-effort low; rc=\$?; printf \"GROK_EXIT=%s\\n\" \"\$rc\"; sleep 300'"
+PANE_PID=$("$TMUX" -L "$SOCKET" display-message -p -t "$SESSION" '#{pane_pid}')
+case "$PANE_PID" in
+  ''|*[!0-9]*) fail "could not resolve the test-owned tmux pane pid" ;;
+esac
 
 wait_for_text "Grok Build" 180 || fail "Grok did not reach its ready composer"
 sleep 1
@@ -108,5 +144,10 @@ pane=$(capture)
 if printf '%s\n' "$pane" | grep -Fq 'bin/fm-watch-arm.sh &'; then
   fail "Grok used a shell ampersand instead of its tracked background task"
 fi
+"$TMUX" -L "$SOCKET" send-keys -t "$SESSION" -l '/exit'
+sleep 1.2
+"$TMUX" -L "$SOCKET" send-keys -t "$SESSION" Enter
+wait_for_text "GROK_EXIT=0" 40 || fail "Grok did not exit cleanly"
+assert_no_provider_descendants "$PANE_PID"
 
 printf 'ok - %s live E2E preserved tracked background completion and shared ledger classification\n' "$GROK_VERSION"

@@ -775,7 +775,13 @@ case "\${1:-}" in
 esac
 exit 0
 SH
-  chmod +x "$fb/tmux"
+  cat > "$fb/claude" <<'SH'
+#!/usr/bin/env bash
+set -u
+printf 'claude %s\n' "$*" >> "${FM_FAKE_PROVIDER_LOG:?}"
+exit 0
+SH
+  chmod +x "$fb/tmux" "$fb/claude"
   fm_fake_exit0 "$fb" treehouse
   printf '%s\n' "$fb"
 }
@@ -784,9 +790,10 @@ run_spawn_case() {  # <bin-root> <fakebin> <log> <state> <data> <config> <proj> 
   local bin=$1 fb=$2 log=$3 state=$4 data=$5 config=$6 proj=$7; shift 7
   [ "${1:-}" = -- ] && shift
   : > "$log"
-  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$bin" \
+  env -u FM_BACKEND -u HERDR_ENV -u CMUX_WORKSPACE_ID -u __CFBundleIdentifier \
+    PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$bin" \
     FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$data" FM_CONFIG_OVERRIDE="$config" \
-    FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" \
+    FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" FM_BACKEND=tmux \
     FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" FM_TMUX_LOG="$log" \
     "$bin/bin/fm-spawn.sh" "$@"
 }
@@ -845,13 +852,19 @@ case "\${1:-}" in
 esac
 exit 0
 SH
-  chmod +x "$fb/tmux"
+  cat > "$fb/claude" <<'SH'
+#!/usr/bin/env bash
+set -u
+printf 'claude %s\n' "$*" >> "${FM_FAKE_PROVIDER_LOG:?}"
+exit 0
+SH
+  chmod +x "$fb/tmux" "$fb/claude"
   fm_fake_exit0 "$fb" treehouse
   printf '%s\n' "$fb"
 }
 
 run_spawn_symlink_case() {  # <label> <physical|logical>
-  local label=$1 first_reply=$2 real_root link_root proj wt id fb data state config log out rc proj_phys initial_path
+  local label=$1 first_reply=$2 real_root link_root proj wt id fb data state config log out rc proj_phys initial_path provider_log spawn_wt spawn_wt_phys
   real_root="$TMP_ROOT/symlink-real-$label"; link_root="$TMP_ROOT/symlink-link-$label"
   mkdir -p "$real_root"
   ln -s "$real_root" "$link_root"
@@ -865,6 +878,7 @@ run_spawn_symlink_case() {  # <label> <physical|logical>
   # fm-spawn.sh's own PROJ_ABS_REAL computes, including any symlink layers
   # ABOVE this test's own synthetic real_root/link_root pair.
   proj_phys=$(cd "$real_root/proj" && pwd -P)
+  wt_phys=$(cd "$wt" && pwd -P)
   case "$first_reply" in
     physical) initial_path=$proj_phys ;;
     logical) initial_path=$proj ;;
@@ -877,12 +891,17 @@ run_spawn_symlink_case() {  # <label> <physical|logical>
   state="$TMP_ROOT/symlink-state-$label"; config="$TMP_ROOT/symlink-config-$label"
   mkdir -p "$state" "$config"
   log="$TMP_ROOT/symlink-spawn-$label.log"
+  provider_log="$TMP_ROOT/symlink-provider-$label.log"
+  : > "$provider_log"
 
-  out=$(run_spawn_case "$ROOT" "$fb" "$log" "$state" "$data" "$config" "$proj" -- "$id" "$proj" claude 2>&1)
+  out=$(FM_FAKE_PROVIDER_LOG="$provider_log" run_spawn_case "$ROOT" "$fb" "$log" "$state" "$data" "$config" "$proj" -- "$id" "$proj" claude 2>&1)
   rc=$?
   expect_code 0 "$rc" "fm-spawn.sh should succeed for a project reached through a symlinked prefix when the backend reports $first_reply cwd"$'\n'"$out"
-  assert_contains "$out" "worktree=$wt" \
-    "fm-spawn.sh did not resolve a symlinked-prefix project to its real worktree when the backend reports $first_reply cwd"
+  spawn_wt=$(printf '%s
+' "$out" | sed -n 's/.*worktree=//p' | tail -n1)
+  spawn_wt_phys=$(cd "$spawn_wt" && pwd -P)
+  [ "$spawn_wt_phys" = "$wt_phys" ] || fail "fm-spawn.sh did not resolve a symlinked-prefix project to its real worktree when the backend reports $first_reply cwd"$'\n'"expected: $wt_phys"$'\n'"actual:   $spawn_wt"
+  [ ! -s "$provider_log" ] || fail "fm-spawn.sh launched a provider binary in the symlinked-prefix regression path: $(cat "$provider_log")"
 
   rm -rf "/tmp/fm-$id"
 }
@@ -1010,7 +1029,7 @@ test_spawn_refuses_unknown_fm_backend_env() {
 }
 
 test_spawn_default_backend_writes_no_meta_field() {
-  local proj wt data id state config out
+  local proj wt data id state config out provider_log
   proj="$TMP_ROOT/nobackend-project"; wt="$TMP_ROOT/nobackend-wt"; data="$TMP_ROOT/nobackend-data"
   id="nobackendz3"
   fm_git_worktree "$proj" "$wt" "fm/$id"
@@ -1019,15 +1038,18 @@ test_spawn_default_backend_writes_no_meta_field() {
   mkdir -p "$data/$id"; printf 'brief\n' > "$data/$id/brief.md"
   state="$TMP_ROOT/nobackend-state"; config="$TMP_ROOT/nobackend-config"
   mkdir -p "$state" "$config"
+  provider_log="$TMP_ROOT/nobackend-provider.log"
+  : > "$provider_log"
 
   out=$(PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" \
     FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$data" FM_CONFIG_OVERRIDE="$config" \
     FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" \
-    FM_TMUX_LOG="$TMP_ROOT/nobackend.log" \
+    FM_FAKE_PROVIDER_LOG="$provider_log" FM_TMUX_LOG="$TMP_ROOT/nobackend.log" \
     "$ROOT/bin/fm-spawn.sh" "$id" "$proj" claude --backend tmux 2>&1)
   expect_code 0 $? "explicit --backend tmux should spawn successfully"$'\n'"$out"
   assert_no_grep 'backend=' "$state/$id.meta" \
     "an explicit --backend tmux (the default) must not write backend= to meta (P1 compatibility contract)"
+  [ ! -s "$provider_log" ] || fail "fm-spawn.sh launched a provider binary in the default-backend regression path: $(cat "$provider_log")"
   rm -rf "/tmp/fm-$id"
   pass "fm-spawn.sh: an explicit --backend tmux resolves silently and writes no backend= (missing means tmux)"
 }
@@ -1073,7 +1095,7 @@ test_spawn_autodetect_nesting_resolves_tmux_silently() {
   # it (today's default path, byte-identical).
   out=$(PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" \
     FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$data" FM_CONFIG_OVERRIDE="$config" \
-    FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" HERDR_ENV=1 \
+    FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" FM_BACKEND='' FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" HERDR_ENV=1 \
     FM_TMUX_LOG="$TMP_ROOT/nest.log" \
     "$ROOT/bin/fm-spawn.sh" "$id" "$proj" claude 2>&1)
   expect_code 0 $? "fm-spawn.sh should auto-detect tmux and spawn successfully for nested tmux-in-herdr"$'\n'"$out"

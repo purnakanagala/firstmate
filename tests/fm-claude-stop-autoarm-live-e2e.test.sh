@@ -32,8 +32,25 @@ HOME_DIR="$LAB/fmhome"
 LIVE_OWNER_HOME="$LAB/live-owner-home"
 TRANSCRIPT="$LAB/claude.jsonl"
 CLAUDE_VERSION=$(claude --version)
+CLAUDE_PID=
+CLAUDE_IDENTITY=
+
+claude_pid_is_owned() {
+  local pid=${1:-$CLAUDE_PID} identity parent
+  [ -n "$pid" ] || return 1
+  parent=$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d '[:space:]' || true)
+  [ "$parent" = "$$" ] || return 1
+  [ -n "$CLAUDE_IDENTITY" ] || return 0
+  identity=$(ps -p "$pid" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+  [ "$identity" = "$CLAUDE_IDENTITY" ]
+}
 
 cleanup() {
+  local pid=${CLAUDE_PID:-${!:-}}
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && claude_pid_is_owned "$pid"; then
+    kill -TERM "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  fi
   rm -rf "$LAB"
 }
 trap cleanup EXIT
@@ -111,9 +128,15 @@ PROMPT='Run exactly `bin/fm-session-start.sh` with Bash as your first tool call.
 
 (
   cd "$PROJECT" || exit 1
-  FM_HOME="$HOME_DIR" CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false \
+  exec env FM_HOME="$HOME_DIR" CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false \
     claude -p "$PROMPT" --dangerously-skip-permissions --effort low --output-format stream-json --verbose
-) > "$TRANSCRIPT" 2>&1 || fail "Claude credentialed auto-arm session failed: $(tail -20 "$TRANSCRIPT")"
+) > "$TRANSCRIPT" 2>&1 &
+CLAUDE_PID=$!
+CLAUDE_IDENTITY=$(ps -p "$CLAUDE_PID" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+wait "$CLAUDE_PID"
+CLAUDE_RC=$?
+[ "$CLAUDE_RC" -eq 0 ] || fail "Claude credentialed auto-arm session failed: $(tail -20 "$TRANSCRIPT")"
+! kill -0 "$CLAUDE_PID" 2>/dev/null || fail "test-owned Claude provider process remained live"
 
 ARM_RUNS=$(wc -l < "$HOME_DIR/state/arm-ran" 2>/dev/null | tr -d ' ')
 [ "$ARM_RUNS" = 2 ] || fail "expected exactly 2 hook-owned arm cycles, got $ARM_RUNS: $(cat "$HOME_DIR/state/arm-ran" 2>/dev/null)"
