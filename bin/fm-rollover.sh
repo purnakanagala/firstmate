@@ -96,16 +96,20 @@ harness_command_matches() {  # <target> <harness>
 }
 
 live_process_matches() {  # <live-line> <target> <harness>
-  local live=$1 target=$2 harness=$3 generation capsule_sha pid extra pane_pid
-  IFS=$'\t' read -r generation capsule_sha pid extra <<< "$live"
-  [ -n "$generation" ] && [ -n "$capsule_sha" ] && [ -n "$pid" ] && [ -z "${extra:-}" ] || return 1
+  local live=$1 target=$2 harness=$3 generation capsule_sha pid live_harness extra pane_pid
+  IFS=$'\t' read -r generation capsule_sha pid live_harness extra <<< "$live"
+  [ -n "$generation" ] && [ -n "$capsule_sha" ] && [ -n "$pid" ] && [ "$live_harness" = "$harness" ] && [ -z "${extra:-}" ] || return 1
   pane_pid=$(fm_backend_tmux_pane_pid "$target") || return 1
   pid_descends_from "$pid" "$pane_pid" || return 1
   harness_command_matches "$target" "$harness"
 }
 
-input_resembles_secret() {
-  LC_ALL=C grep -qiE '(BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|(^|[^[:alnum:]_])(password|passwd|pwd|token|secret|api[ _-]?key|authorization|credential)[[:space:]]*[:=][[:space:]]*[^[:space:]]|bearer[[:space:]]+[A-Za-z0-9._~+/-]{8,}|://[^/@[:space:]]+:[^/@[:space:]]+@|(^|[^[:alnum:]_])(sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}))'
+capsule_text_is_safe() {  # <text>
+  local value=$1
+  printf '%s' "$value" | LC_ALL=C grep -qE '^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/_#+-]*$' || return 1
+  printf '%s' "$value" | LC_ALL=C grep -qiE '(BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|(^|[^[:alnum:]_])(password|passwd|pwd|token|secret|api[ _-]?key|authorization|credential)([^[:alnum:]_]|$)|bearer[[:space:]]|://|(^|[^[:alnum:]_])(sk-|gh[pousr]_|glpat-|xox[baprs]-)|[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|[A-Za-z0-9._/-]{24,})' \
+    && return 1
+  return 0
 }
 
 validate_capsule() {
@@ -131,6 +135,9 @@ validate_capsule() {
   ' "$file" >/dev/null || refuse "capsule does not match fm-rollover-capsule.v1"
   [ "$(jq -r '.objective_sha256' "$file")" = "$(sha256_text "$(jq -r '.current_objective' "$file")")" ] \
     || refuse "capsule objective digest mismatch"
+  while IFS= read -r value; do
+    capsule_text_is_safe "$value" || refuse "capsule text violates the non-secret input contract"
+  done <<< "$(jq -r '[.current_objective] + .accepted_decisions + .superseded_instructions.markers | .[]' "$file")"
 }
 
 if [ "${1:-}" = --validate ]; then
@@ -162,8 +169,7 @@ done
 for value in "$OBJECTIVE" "${DECISIONS[@]+"${DECISIONS[@]}"}" "${SUPERSEDES[@]+"${SUPERSEDES[@]}"}"; do
   [ "${#value}" -le 512 ] || [ "$value" = "$OBJECTIVE" ] || refuse "decision/marker exceeds 512 bytes"
   [[ "$value" != *$'\n'* ]] || refuse "capsule inputs must be one line"
-  printf '%s' "$value" | input_resembles_secret \
-    && refuse "capsule input resembles secret material" || true
+  capsule_text_is_safe "$value" || refuse "capsule input violates the non-secret text contract"
 done
 
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
@@ -211,9 +217,22 @@ command -v "$HARNESS" >/dev/null 2>&1 || refuse "$HARNESS executable not found o
 CAPSULE="$DATA/$ID/rollover-capsule.json"
 mkdir -p "$DATA/$ID"
 PREV=0
-if [ -f "$CAPSULE" ] && [ ! -L "$CAPSULE" ]; then
+CURRENT_SHA=
+META_GEN=$(meta_get "$META" rollover_generation)
+META_CAPSULE=$(meta_get "$META" rollover_capsule)
+LIVE=$(cat "$STATE/$ID.rollover-live" 2>/dev/null || true)
+if [ -e "$CAPSULE" ] || [ -L "$CAPSULE" ]; then
+  [ -f "$CAPSULE" ] && [ ! -L "$CAPSULE" ] || refuse "existing rollover capsule is unsafe"
   validate_capsule "$CAPSULE"
   PREV=$(jq -r '.generation' "$CAPSULE")
+  CURRENT_SHA=$(sha256_file "$CAPSULE")
+  [ "$META_GEN" = "$PREV" ] && [ "$META_CAPSULE" = "$CAPSULE" ] \
+    || refuse "existing rollover capsule and metadata generation do not match"
+  [[ "$LIVE" = "$PREV"$'\t'"$CURRENT_SHA"$'\t'* ]] && live_process_matches "$LIVE" "$TARGET" "$HARNESS" \
+    || refuse "existing rollover generation has no matching live process proof"
+else
+  [ -z "$META_GEN" ] && [ -z "$META_CAPSULE" ] && [ -z "$LIVE" ] && [ ! -e "$STATE/$ID.rollover-ack" ] \
+    || refuse "rollover generation state exists without its capsule"
 fi
 GEN=$((PREV + 1))
 BRANCH=$(git -C "$WT_REAL" symbolic-ref --quiet --short HEAD 2>/dev/null || printf detached)
@@ -258,12 +277,7 @@ LAUNCH="FM_PI_HARNESS=$(fm_shell_quote "$HARNESS") FM_ROLLOVER_TASK=$(fm_shell_q
 if [ -f "$CAPSULE" ]; then
   OLD_SEM=$(jq -S 'del(.generation,.superseded_instructions.generation_marker)' "$CAPSULE")
   NEW_SEM=$(jq -S 'del(.generation,.superseded_instructions.generation_marker)' "$TMP")
-  OLD_SHA=$(sha256_file "$CAPSULE")
-  LIVE=$(cat "$STATE/$ID.rollover-live" 2>/dev/null || true)
-  if [ "$OLD_SEM" = "$NEW_SEM" ] && [ "$(meta_get "$META" rollover_generation)" = "$PREV" ] \
-     && [ "$(meta_get "$META" rollover_capsule)" = "$CAPSULE" ] \
-     && [[ "$LIVE" = "$PREV"$'\t'"$OLD_SHA"$'\t'* ]] \
-     && live_process_matches "$LIVE" "$TARGET" "$HARNESS"; then
+  if [ "$OLD_SEM" = "$NEW_SEM" ]; then
     rm -f "$TMP"
     echo "rollover unchanged: $ID generation=$PREV capsule=$CAPSULE"
     exit 0

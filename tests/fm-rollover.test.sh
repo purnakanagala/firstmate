@@ -77,8 +77,9 @@ case "$1" in
           sha=$(printf '%s' "$command" | sed -n "s/.*FM_ROLLOVER_CAPSULE_SHA='\([^']*\)'.*/\1/p")
           state=$(printf '%s' "$command" | sed -n "s/.*FM_ROLLOVER_STATE='\([^']*\)'.*/\1/p")
           task=$(printf '%s' "$command" | sed -n "s/.*FM_ROLLOVER_TASK='\([^']*\)'.*/\1/p")
-          printf 'pi\n' > "$root/agent"
-          printf '%s\t%s\t4242\n' "$gen" "$sha" > "$state/$task.rollover-live"
+          harness=$(printf '%s' "$command" | sed -n "s/.*FM_PI_HARNESS='\([^']*\)'.*/\1/p")
+          printf '%s\n' "$harness" > "$root/agent"
+          printf '%s\t%s\t4242\t%s\n' "$gen" "$sha" "$harness" > "$state/$task.rollover-live"
           if [ "${FM_FAKE_MUTATE_IGNORED:-0}" = 1 ]; then printf 'changed during launch\n' > "$FM_FAKE_WT/.private-cache"; fi
           printf 'launch\n' >> "$root/launches"
           ;;
@@ -144,12 +145,16 @@ printf '%s' "$OUT" | grep -F 'rollover unchanged' >/dev/null || fail "identical 
 sed 's/^harness=pi$/harness=pi-signed/' "$HOME1/state/task.meta" > "$TMP/meta.signed"
 mv "$TMP/meta.signed" "$HOME1/state/task.meta"
 printf 'pi-signed\n' > "$TMP/agent"
+if run_rollover >/dev/null 2>&1; then fail "relabeling a live Pi generation as pi-signed was accepted"; fi
+awk '!/^rollover_generation=/ && !/^rollover_capsule=/' "$HOME1/state/task.meta" > "$TMP/meta.signed.clean"
+mv "$TMP/meta.signed.clean" "$HOME1/state/task.meta"
+rm -f "$CAPSULE" "$HOME1/state/task.rollover-live" "$HOME1/state/task.rollover-ack"
 OUT=$(run_rollover)
-printf '%s' "$OUT" | grep -F 'rollover unchanged' >/dev/null || fail "pi-signed did not share the verified guarded path"
-sed 's/^harness=pi-signed$/harness=pi/' "$HOME1/state/task.meta" > "$TMP/meta.pi"
-mv "$TMP/meta.pi" "$HOME1/state/task.meta"
-printf 'pi\n' > "$TMP/agent"
-pass "fresh Pi session proof, Pi-signed parity, bounded capsule, unlanded-work preservation, and idempotent retry"
+printf '%s' "$OUT" | grep -F 'fresh-session=proved worktree=preserved' >/dev/null \
+  || fail "fresh pi-signed rollover did not prove ownership: $OUT"
+[ "$(grep -c '^launch$' "$TMP/launches")" = 2 ] || fail "fresh pi-signed rollover did not launch exactly once"
+[ "$(awk -F '\t' '{print $4}' "$HOME1/state/task.rollover-live")" = pi-signed ] || fail "pi-signed live proof lost its launch identity"
+pass "fresh Pi and pi-signed launches, process-bound identity, bounded capsule, preservation, and idempotency"
 
 cp "$CAPSULE" "$TMP/tampered.json"
 jq '.objective_sha256 = ("0" * 64)' "$TMP/tampered.json" > "$TMP/tampered.next" && mv "$TMP/tampered.next" "$TMP/tampered.json"
@@ -162,13 +167,28 @@ for needle in 'event.toolName === "fm_rollover_ack"' 'if (!acknowledged())' 'cap
 done
 pass "generation mismatch and pre-tool acknowledgment enforcement"
 
-for secret in 'password: hunter2' 'Authorization: Bearer abcdefghijkl' 'https://user:pass@example.test/path' 'sk-abcdefghijklmnop' 'ghp_abcdefghijklmnop'; do
+cp "$CAPSULE" "$TMP/generation.save"
+jq '.generation = 9' "$CAPSULE" > "$TMP/generation.stale" && mv "$TMP/generation.stale" "$CAPSULE"
+if PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" FM_HOME="$HOME1" FM_ROOT_OVERRIDE="$ROOT" \
+  "$ROOT/bin/fm-rollover.sh" task --objective 'A different bounded objective.' --supersedes prior >/dev/null 2>&1; then
+  fail "stale capsule generation advanced instead of refusing"
+fi
+cp "$TMP/generation.save" "$CAPSULE"
+[ "$(grep -c '^launch$' "$TMP/launches")" = 2 ] || fail "stale generation mismatch launched a worker"
+pass "stale capsule, metadata, and live generations stop before rollover"
+
+for secret in 'password: hunter2' 'Authorization: Bearer abcdefghijkl' 'https://user:pass@example.test/path' 'sk-abcdefghijklmnop' 'ghp_abcdefghijklmnop' 'xoxb-abcdefghijklmnop' 'glpat-abcdefghijklmnop' 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJl' 'abcdefghijklmnopqrstuvwx'; do
   if PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" FM_HOME="$HOME1" FM_ROOT_OVERRIDE="$ROOT" \
     "$ROOT/bin/fm-rollover.sh" task --objective "$secret" --supersedes old >/dev/null 2>&1; then
     fail "secret-shaped capsule input was accepted: $secret"
   fi
 done
-pass "common secret forms are refused before capsule publication"
+cp "$CAPSULE" "$TMP/secret-capsule.json"
+jq --arg value 'xoxb-abcdefghijklmnop' '.current_objective = $value | .objective_sha256 = "7df8db912a08bb93474ab6d8a7d39deee81697d20a935e0cc39dba79f7ae156d"' "$TMP/secret-capsule.json" > "$TMP/secret-capsule.next"
+if "$ROOT/bin/fm-rollover.sh" --validate "$TMP/secret-capsule.next" >/dev/null 2>&1; then
+  fail "secret-bearing external capsule passed validation"
+fi
+pass "bounded non-secret text contract rejects credentials and opaque values"
 
 refusal_case() {
   local label=$1 replacement=$2
@@ -190,7 +210,7 @@ done
 for unsupported_backend in herdr zellij orca cmux; do
   refusal_case "$unsupported_backend" "backend=$unsupported_backend"
 done
-[ "$(grep -c '^launch$' "$TMP/launches")" = 1 ] || fail "unsupported refusal launched a session"
+[ "$(grep -c '^launch$' "$TMP/launches")" = 2 ] || fail "unsupported refusal launched a session"
 pass "scout, secondmate, unsupported harness, and unsupported backend boundaries"
 
 if PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" FM_HOME="$HOME2" FM_ROOT_OVERRIDE="$ROOT" \

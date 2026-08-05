@@ -5,7 +5,7 @@
 **Verified:** 2026-08-05.
 
 The current guarantee is behavioral rather than a claim that local polling consumes tokens.
-The rollover regression uses fake tmux and Pi surfaces, never a provider call, and proves the shell transaction, process-bound generation publication, capsule acknowledgment enforcement, unchanged complete worktree payload, idempotent retry, and refusal boundaries.
+The rollover regression uses executable Pi and pi-signed doubles with fake tmux, never a provider call, and proves a fresh launch on each supported command axis, launch-selected harness identity, process-bound generation publication, capsule acknowledgment enforcement, unchanged complete worktree payload, idempotent retry, stale-generation refusal, and refusal boundaries.
 It does not establish that the installed Pi or pi-signed harness loads and enforces the new guard because neither executable was available in the verification environment.
 The rollover pre-tool boundary must remain unverified until both real harness paths are exercised provider-free and this record contains their exact versions, commands, and output.
 The watcher regression proves that an unchanged already-delivered quiet status absorbs later pane-hash churn only while the ordinary non-X ship agent is affirmatively alive, while changed status and unsafe liveness still surface.

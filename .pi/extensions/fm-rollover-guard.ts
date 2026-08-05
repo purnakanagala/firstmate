@@ -10,6 +10,7 @@ const generation = process.env.FM_ROLLOVER_GENERATION ?? "";
 const capsulePath = process.env.FM_ROLLOVER_CAPSULE ?? "";
 const expectedCapsuleSha = process.env.FM_ROLLOVER_CAPSULE_SHA ?? "";
 const state = process.env.FM_ROLLOVER_STATE ?? "";
+const harness = process.env.FM_PI_HARNESS ?? "";
 const livePath = `${state}/${task}.rollover-live`;
 const ackPath = `${state}/${task}.rollover-ack`;
 
@@ -25,6 +26,7 @@ function sha256(bytes: string): string {
 }
 
 function capsule(): { value: Capsule; bytes: string } {
+  if (harness !== "pi" && harness !== "pi-signed") throw new Error("rollover harness identity is invalid");
   const bytes = readFileSync(capsulePath, "utf8");
   if (sha256(bytes) !== expectedCapsuleSha) throw new Error("capsule bytes do not match the launch-bound digest");
   const value = JSON.parse(bytes) as Capsule;
@@ -45,7 +47,7 @@ function atomicWrite(path: string, content: string): void {
 function acknowledged(): boolean {
   try {
     const line = readFileSync(ackPath, "utf8").trim();
-    return line === `${generation}\t${expectedCapsuleSha}\t${process.pid}`;
+    return line === `${generation}\t${expectedCapsuleSha}\t${process.pid}\t${harness}`;
   } catch {
     return false;
   }
@@ -58,7 +60,7 @@ export default function (pi: ExtensionAPI) {
     const current = capsule();
     objectiveSha = current.value.objective_sha256;
     valid = true;
-    atomicWrite(livePath, `${generation}\t${expectedCapsuleSha}\t${process.pid}\n`);
+    atomicWrite(livePath, `${generation}\t${expectedCapsuleSha}\t${process.pid}\t${harness}\n`);
   } catch {
     valid = false;
   }
@@ -77,7 +79,7 @@ export default function (pi: ExtensionAPI) {
       if (String(input.generation) !== generation || input.objective_sha256 !== objectiveSha) {
         throw new Error("rollover acknowledgment does not match the current capsule generation/objective");
       }
-      if (!acknowledged()) atomicWrite(ackPath, `${generation}\t${expectedCapsuleSha}\t${process.pid}\n`);
+      if (!acknowledged()) atomicWrite(ackPath, `${generation}\t${expectedCapsuleSha}\t${process.pid}\t${harness}\n`);
       return {
         content: [{ type: "text", text: `acknowledged rollover generation ${generation}; superseded instructions remain inactive` }],
         details: { generation: Number(generation), objective_sha256: objectiveSha },
