@@ -329,6 +329,44 @@ clear_pause_tracking() {  # <window>
   rm -f "$STATE/.stale-$key" "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key"
 }
 
+# Absorb pane-hash churn after one exact quiet status has already been delivered.
+# Durable status/check queues remain untouched; a changed status signature, X link,
+# dead/unknown agent, or different task kind returns nonzero and follows the normal
+# actionable path. The bounded counter measures model turns avoided without
+# pretending that local polling itself costs tokens.
+quiet_wait_stale_absorbed() {  # <window> <task> <hash>
+  local win=$1 task=$2 h=$3 meta last delivered=0 seen sig key count_file count
+  meta="$STATE/$task.meta"
+  [ "$(window_kind "$win")" = ship ] || return 1
+  [ -f "$meta" ] || return 1
+  [ -z "$(fm_meta_get "$meta" x_request)" ] || return 1
+  last=$(last_status_line "$STATE/$task.status")
+  status_is_quiet_wait "$last" || return 1
+  # Declared pauses retain their existing bounded recheck cadence.
+  status_is_paused_or_captain_held "$last" && return 1
+  if status_is_captain_relevant "$last"; then
+    [ "$(cat "$(_hb_surfaced_path "$task")" 2>/dev/null || true)" = "$last" ] && delivered=1
+  else
+    seen="$STATE/.seen-${task}_status"
+    sig=$(stat_sig "$STATE/$task.status" 2>/dev/null || true)
+    [ -n "$sig" ] && [ "$(cat "$seen" 2>/dev/null || true)" = "$sig" ] && delivered=1
+  fi
+  [ "$delivered" -eq 1 ] || return 1
+  [ "$(fm_backend_agent_alive "$(window_backend "$win")" "$win" 2>/dev/null)" = alive ] || return 1
+  key=$(printf '%s' "$win" | tr ':/.' '___')
+  if [ "$(cat "$STATE/.stale-$key" 2>/dev/null || true)" != "$h" ]; then
+    count_file="$STATE/.quiet-stale-suppressed-$key"
+    count=$(cat "$count_file" 2>/dev/null || echo 0)
+    case "$count" in ''|*[!0-9]*) count=0 ;; esac
+    [ "$count" -ge 999999 ] || count=$((count + 1))
+    printf '%s\n' "$count" > "$count_file"
+  fi
+  printf '%s' "$h" > "$STATE/.stale-$key"
+  rm -f "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key"
+  triage_log "absorbed stale (unchanged delivered quiet status): $win"
+  return 0
+}
+
 # Reconcile a declared pause or captain-held status with authoritative crew state.
 # Only a confidently dead ordinary crew may recover paused classification after
 # fm-crew-state has fallen back to stopped or unknown.
@@ -873,6 +911,8 @@ EOF
             printf '%s' "$h" > "$sf"
             wake "stale: $w"
           fi
+        elif quiet_wait_stale_absorbed "$w" "$task" "$h"; then
+          :
         elif stale_is_terminal "$w" "$STATE"; then
           # The log's last line is captain-relevant - but that alone is not
           # proof the crew is actually done: a crew's own status log gets no

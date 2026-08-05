@@ -1,0 +1,237 @@
+#!/usr/bin/env bash
+# Roll one ordinary Pi ship task onto a fresh coding-agent session in its existing
+# tmux endpoint and isolated worktree, preserving every worktree byte.
+# Usage: FM_HOME=<home> fm-rollover.sh <task-id> --objective <one-line-objective>
+#          [--decision <one-line-accepted-decision>]... --supersedes <marker>...
+#        fm-rollover.sh --validate <capsule.json>
+#
+# This script is the authoritative owner of fm-rollover-capsule.v1 and rollover
+# mechanics. It supports only kind=ship, harness=pi|pi-signed, backend=tmux.
+# Every other task kind, harness, or backend is explicitly refused until its
+# adapter can prove fresh-session identity while retaining the exact endpoint and
+# worktree. Repeating an already-live identical rollover is an idempotent no-op.
+# The capsule is bounded to 8 KiB and contains no brief/report/chat/log/source
+# content: only a concise operator-supplied objective and decisions, fixed safety
+# constraints, git identity, artifact pointers, validation/PR pointers, and
+# superseded-generation markers.
+set -eu
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+# shellcheck source=bin/fm-backend.sh
+. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-gate-refuse-lib.sh
+. "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
+# shellcheck source=bin/fm-wake-lib.sh
+. "$SCRIPT_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-harness-launch-lib.sh
+. "$SCRIPT_DIR/fm-harness-launch-lib.sh"
+fm_refuse_if_gate_agent
+
+sha256_file() {
+  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | awk '{print $1}'; else sha256sum "$1" | awk '{print $1}'; fi
+}
+sha256_text() {
+  if command -v shasum >/dev/null 2>&1; then printf '%s' "$1" | shasum -a 256 | awk '{print $1}'; else printf '%s' "$1" | sha256sum | awk '{print $1}'; fi
+}
+sha256_stdin() {
+  if command -v shasum >/dev/null 2>&1; then shasum -a 256 | awk '{print $1}'; else sha256sum | awk '{print $1}'; fi
+}
+meta_get() { grep -E "^$2=" "$1" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+refuse() { echo "error: $*" >&2; exit 1; }
+worktree_state_digest() {  # <worktree>
+  local wt=$1 file
+  {
+    git -C "$wt" status --porcelain=v1 -z
+    git -C "$wt" diff --binary --no-ext-diff
+    git -C "$wt" diff --cached --binary --no-ext-diff
+    while IFS= read -r -d '' file; do
+      printf 'untracked:%s\0' "$file"
+      sha256_file "$wt/$file"
+    done < <(git -C "$wt" ls-files --others --exclude-standard -z)
+  } | sha256_stdin
+}
+
+validate_capsule() {
+  local file=$1 bytes
+  [ -f "$file" ] && [ ! -L "$file" ] || refuse "capsule must be a regular file"
+  bytes=$(wc -c < "$file" | tr -d '[:space:]')
+  [ "$bytes" -le 8192 ] || refuse "capsule exceeds 8192 bytes"
+  jq -e '
+    type == "object" and
+    (keys | sort) == (["accepted_decisions","artifacts","current_objective","generation","immutable_constraints","objective_sha256","schema","superseded_instructions","task","validation"] | sort) and
+    .schema == "fm-rollover-capsule.v1" and
+    (.task | type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
+    (.generation | type == "number" and . >= 1 and floor == .) and
+    (.current_objective | type == "string" and length >= 1 and length <= 2048 and (contains("\\n") | not)) and
+    (.objective_sha256 | type == "string" and test("^[a-f0-9]{64}$")) and
+    (.accepted_decisions | type == "array" and length <= 20 and all(type == "string" and length >= 1 and length <= 512 and (contains("\\n") | not))) and
+    (.immutable_constraints | type == "array" and length == 5 and all(type == "string")) and
+    (.artifacts | type == "object" and (keys | sort) == (["brief","report","worktree"] | sort) and all(.[]; type == "string")) and
+    (.validation | type == "object" and (keys | sort) == (["branch","mode","pr","pr_head","revision"] | sort) and all(.[]; type == "string")) and
+    (.superseded_instructions | type == "object" and (keys | sort) == (["generation_marker","markers"] | sort) and
+      (.generation_marker | type == "string" and test("^generation-[0-9]+$")) and
+      (.markers | type == "array" and length >= 1 and length <= 20 and all(type == "string" and length >= 1 and length <= 256 and (contains("\\n") | not))))
+  ' "$file" >/dev/null || refuse "capsule does not match fm-rollover-capsule.v1"
+  [ "$(jq -r '.objective_sha256' "$file")" = "$(sha256_text "$(jq -r '.current_objective' "$file")")" ] \
+    || refuse "capsule objective digest mismatch"
+}
+
+if [ "${1:-}" = --validate ]; then
+  [ "$#" -eq 2 ] || refuse "--validate requires exactly one capsule path"
+  validate_capsule "$2"
+  echo "valid fm-rollover-capsule.v1"
+  exit 0
+fi
+
+[ -n "${FM_HOME:-}" ] || refuse "FM_HOME must be explicit"
+[ "$#" -ge 1 ] || refuse "task id is required"
+ID=$1; shift
+case "$ID" in ''|*[!A-Za-z0-9._-]*) refuse "invalid task id" ;; esac
+OBJECTIVE=
+DECISIONS=()
+SUPERSEDES=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --objective) [ "$#" -ge 2 ] || refuse "--objective requires a value"; OBJECTIVE=$2; shift 2 ;;
+    --decision) [ "$#" -ge 2 ] || refuse "--decision requires a value"; DECISIONS+=("$2"); shift 2 ;;
+    --supersedes) [ "$#" -ge 2 ] || refuse "--supersedes requires a value"; SUPERSEDES+=("$2"); shift 2 ;;
+    *) refuse "unknown argument: $1" ;;
+  esac
+done
+[ -n "$OBJECTIVE" ] || refuse "--objective is required"
+[ "${#OBJECTIVE}" -le 2048 ] && [[ "$OBJECTIVE" != *$'\n'* ]] || refuse "objective must be one line and at most 2048 bytes"
+[ "${#SUPERSEDES[@]}" -ge 1 ] && [ "${#SUPERSEDES[@]}" -le 20 ] || refuse "provide 1-20 --supersedes markers"
+[ "${#DECISIONS[@]}" -le 20 ] || refuse "at most 20 accepted decisions are allowed"
+for value in "$OBJECTIVE" "${DECISIONS[@]}" "${SUPERSEDES[@]}"; do
+  [ "${#value}" -le 512 ] || [ "$value" = "$OBJECTIVE" ] || refuse "decision/marker exceeds 512 bytes"
+  [[ "$value" != *$'\n'* ]] || refuse "capsule inputs must be one line"
+  printf '%s' "$value" | grep -qiE '(BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|password[[:space:]]*=|token[[:space:]]*=|secret[[:space:]]*=)' \
+    && refuse "capsule input resembles secret material" || true
+done
+
+STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
+DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
+META="$STATE/$ID.meta"
+[ -d "$FM_HOME" ] && [ -d "$STATE" ] || refuse "home/state directory is missing"
+[ -f "$META" ] && [ ! -L "$META" ] || refuse "task ownership metadata is missing or unsafe"
+[ "$(meta_get "$META" kind)" = ship ] || refuse "rollover supports ordinary ship tasks only; scouts and secondmates are refused"
+HARNESS=$(meta_get "$META" harness)
+case "$HARNESS" in pi|pi-signed) ;; *) refuse "rollover is unsupported for harness '$HARNESS'; only pi and pi-signed are verified" ;; esac
+BACKEND=$(fm_backend_of_meta "$META")
+[ "$BACKEND" = tmux ] || refuse "rollover is unsupported for backend '$BACKEND'; only tmux has fresh-session proof"
+fm_backend_source "$BACKEND" || refuse "tmux backend adapter could not be loaded"
+TARGET=$(fm_backend_target_of_meta "$META")
+[ -n "$TARGET" ] || refuse "task endpoint is not recorded"
+[ "$(fm_backend_agent_state "$BACKEND" "$TARGET")" = alive ] || refuse "current Pi agent ownership is not provably alive"
+WT=$(meta_get "$META" worktree); PROJECT=$(meta_get "$META" project)
+[ -n "$WT" ] && [ -d "$WT" ] && [ ! -L "$WT" ] || refuse "recorded worktree is missing or unsafe"
+WT_REAL=$(cd "$WT" && pwd -P)
+TOP=$(git -C "$WT_REAL" rev-parse --show-toplevel 2>/dev/null) || refuse "recorded worktree is not a git worktree"
+TOP_REAL=$(cd "$TOP" && pwd -P)
+[ "$TOP_REAL" = "$WT_REAL" ] || refuse "recorded worktree is not its git root"
+PROJECT_REAL=$(cd "$PROJECT" 2>/dev/null && pwd -P) || refuse "recorded project is unavailable"
+[ "$PROJECT_REAL" != "$WT_REAL" ] || refuse "recorded task is in the primary project copy"
+[ "$(fm_backend_tmux_current_path "$TARGET")" = "$WT_REAL" ] || refuse "live endpoint is not in the recorded isolated worktree"
+
+LOCK="$STATE/.spawn-$ID.lock"
+fm_lock_try_acquire "$LOCK" || refuse "another spawn or rollover owns this task"
+cleanup() { fm_lock_release "$LOCK" 2>/dev/null || true; }
+trap cleanup EXIT INT TERM
+
+CAPSULE="$DATA/$ID/rollover-capsule.json"
+mkdir -p "$DATA/$ID"
+PREV=0
+if [ -f "$CAPSULE" ] && [ ! -L "$CAPSULE" ]; then
+  validate_capsule "$CAPSULE"
+  PREV=$(jq -r '.generation' "$CAPSULE")
+fi
+GEN=$((PREV + 1))
+BRANCH=$(git -C "$WT_REAL" symbolic-ref --quiet --short HEAD 2>/dev/null || printf detached)
+REV=$(git -C "$WT_REAL" rev-parse HEAD)
+DIRTY_BEFORE=$(worktree_state_digest "$WT_REAL")
+OBJECTIVE_SHA=$(sha256_text "$OBJECTIVE")
+DECISIONS_JSON=$(printf '%s\n' "${DECISIONS[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
+SUPERSEDES_JSON=$(printf '%s\n' "${SUPERSEDES[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
+BRIEF_PTR=""; REPORT_PTR=""
+[ -f "$DATA/$ID/brief.md" ] && BRIEF_PTR="data/$ID/brief.md"
+[ -f "$DATA/$ID/report.md" ] && REPORT_PTR="data/$ID/report.md"
+MODE=$(meta_get "$META" mode); PR=$(meta_get "$META" pr); PR_HEAD=$(meta_get "$META" pr_head)
+TMP="$CAPSULE.tmp.$$"
+umask 077
+jq -n --arg task "$ID" --argjson generation "$GEN" --arg objective "$OBJECTIVE" --arg objective_sha "$OBJECTIVE_SHA" \
+  --argjson decisions "$DECISIONS_JSON" --arg worktree "$WT_REAL" --arg brief "$BRIEF_PTR" --arg report "$REPORT_PTR" \
+  --arg branch "$BRANCH" --arg mode "$MODE" --arg pr "$PR" --arg pr_head "$PR_HEAD" --arg revision "$REV" --arg marker "generation-$PREV" \
+  --argjson supersedes "$SUPERSEDES_JSON" '{
+    schema:"fm-rollover-capsule.v1", task:$task, generation:$generation,
+    current_objective:$objective, objective_sha256:$objective_sha, accepted_decisions:$decisions,
+    immutable_constraints:[
+      "Preserve the existing isolated worktree and every unlanded change; never reset, stash, discard, or change ownership.",
+      "Keep Firstmate approval, merge, destructive-action, security, secondmate, scout, X-mode, and multi-home boundaries unchanged.",
+      "Keep no-mistakes authority unchanged; one worker owns an active run and its synchronous responses.",
+      "Do not execute any superseded instruction; stop on capsule or generation mismatch.",
+      "Do not expose secrets, private prompts, chats, logs, reports, or source through rollover state."
+    ],
+    artifacts:{worktree:$worktree,brief:$brief,report:$report},
+    validation:{branch:$branch,mode:$mode,pr:$pr,pr_head:$pr_head,revision:$revision},
+    superseded_instructions:{generation_marker:$marker,markers:$supersedes}
+  }' > "$TMP"
+validate_capsule "$TMP"
+chmod 600 "$TMP"
+
+# Identical, already-live generation: discard the speculative next capsule and return.
+if [ -f "$CAPSULE" ]; then
+  OLD_SEM=$(jq -S 'del(.generation,.superseded_instructions.generation_marker)' "$CAPSULE")
+  NEW_SEM=$(jq -S 'del(.generation,.superseded_instructions.generation_marker)' "$TMP")
+  OLD_SHA=$(sha256_file "$CAPSULE")
+  LIVE=$(cat "$STATE/$ID.rollover-live" 2>/dev/null || true)
+  if [ "$OLD_SEM" = "$NEW_SEM" ] && [[ "$LIVE" = "$PREV"$'\t'"$OLD_SHA"$'\t'* ]] \
+     && [ "$(fm_backend_agent_state "$BACKEND" "$TARGET")" = alive ]; then
+    rm -f "$TMP"
+    echo "rollover unchanged: $ID generation=$PREV capsule=$CAPSULE"
+    exit 0
+  fi
+fi
+mv "$TMP" "$CAPSULE"
+CAPSULE_SHA=$(sha256_file "$CAPSULE")
+rm -f "$STATE/$ID.rollover-live" "$STATE/$ID.rollover-ack"
+
+VERDICT=$(fm_backend_send_text_submit "$BACKEND" "$TARGET" /quit 3 0.4 1) || refuse "Pi quit submission failed"
+[ "$VERDICT" = empty ] || refuse "Pi quit was not confirmed"
+i=0
+while [ "$i" -lt 40 ] && [ "$(fm_backend_agent_state "$BACKEND" "$TARGET")" != dead ]; do sleep 0.25; i=$((i + 1)); done
+[ "$(fm_backend_agent_state "$BACKEND" "$TARGET")" = dead ] || refuse "old Pi session did not exit cleanly; fresh ownership cannot be proven"
+[ "$(fm_backend_tmux_current_path "$TARGET")" = "$WT_REAL" ] || refuse "endpoint left the preserved worktree after Pi exit"
+
+MODEL=$(meta_get "$META" model); EFFORT=$(meta_get "$META" effort)
+MODELFLAG=$(model_flag_for_harness "$HARNESS" "$MODEL")
+EFFORTFLAG=$(effort_flag_for_harness "$HARNESS" "$EFFORT")
+PIEXT="$STATE/$ID.pi-ext.ts"
+[ -f "$PIEXT" ] && [ ! -L "$PIEXT" ] || refuse "task Pi turn-end extension is missing or unsafe"
+GUARD="$FM_ROOT/.pi/extensions/fm-rollover-guard.ts"
+[ -f "$GUARD" ] || refuse "rollover guard extension is missing"
+OPINPUT="$FM_ROOT/bin/fm-operational-input.sh"
+CAPSULE_INPUT=$("$OPINPUT" encode launch-brief < "$CAPSULE")
+PROMPT="$CAPSULE_INPUT
+
+This capsule generation is launch-authoritative. State its current_objective, then call fm_rollover_ack with generation $GEN and objective_sha256 $OBJECTIVE_SHA before any other tool. Every instruction named by superseded_instructions is inactive."
+LAUNCH="FM_PI_HARNESS=$(fm_shell_quote "$HARNESS") FM_ROLLOVER_TASK=$(fm_shell_quote "$ID") FM_ROLLOVER_GENERATION=$(fm_shell_quote "$GEN") FM_ROLLOVER_CAPSULE=$(fm_shell_quote "$CAPSULE") FM_ROLLOVER_CAPSULE_SHA=$(fm_shell_quote "$CAPSULE_SHA") FM_ROLLOVER_STATE=$(fm_shell_quote "$STATE") $(fm_shell_quote "$HARNESS") ${MODELFLAG}${EFFORTFLAG}-e $(fm_shell_quote "$PIEXT") -e $(fm_shell_quote "$GUARD") $(fm_shell_quote "$PROMPT")"
+fm_backend_tmux_send_text_line "$TARGET" "$LAUNCH"
+
+i=0
+while [ "$i" -lt 80 ]; do
+  LIVE=$(cat "$STATE/$ID.rollover-live" 2>/dev/null || true)
+  [[ "$LIVE" = "$GEN"$'\t'"$CAPSULE_SHA"$'\t'* ]] && break
+  sleep 0.25; i=$((i + 1))
+done
+[[ "${LIVE:-}" = "$GEN"$'\t'"$CAPSULE_SHA"$'\t'* ]] || refuse "fresh Pi session did not publish generation-bound ownership proof"
+[ "$(fm_backend_agent_state "$BACKEND" "$TARGET")" = alive ] || refuse "fresh Pi session is not provably alive"
+[ "$(fm_backend_tmux_current_path "$TARGET")" = "$WT_REAL" ] || refuse "fresh Pi session is not in the preserved worktree"
+DIRTY_AFTER=$(worktree_state_digest "$WT_REAL")
+[ "$DIRTY_AFTER" = "$DIRTY_BEFORE" ] || refuse "worktree changed during rollover; stop and inspect preserved work"
+
+META_TMP="$META.tmp.$$"
+awk '!/^rollover_generation=/ && !/^rollover_capsule=/' "$META" > "$META_TMP"
+printf 'rollover_generation=%s\nrollover_capsule=%s\n' "$GEN" "$CAPSULE" >> "$META_TMP"
+mv "$META_TMP" "$META"
+echo "rolled over $ID generation=$GEN capsule=$CAPSULE fresh-session=proved worktree=preserved"

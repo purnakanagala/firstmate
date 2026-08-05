@@ -140,6 +140,21 @@ status_is_paused_or_captain_held() {  # <status-line>
   [ "$verb" = "${FM_CLASSIFY_CAPTAIN_HELD_VERB:-$FM_CLASSIFY_CAPTAIN_HELD_VERB_DEFAULT}" ]
 }
 
+# 0 when a status line declares an unchanged quiet state that needs one durable
+# delivery but not a new model turn for every subsequently changing idle-pane
+# hash. Runtime consumers must still prove that exact status was delivered and
+# that the agent and endpoint remain alive before suppressing anything.
+status_is_quiet_wait() {  # <status-line>
+  local line=$1 verb
+  status_is_paused_or_captain_held "$line" && return 0
+  [ -n "$line" ] || return 1
+  verb=$(status_line_verb "$line")
+  case "$verb" in
+    done|needs-decision|blocked|failed) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # --- durable keyed decisions ------------------------------------------------
 #
 # The status stream is an append-only EVENT log. Reading it last-event-wins

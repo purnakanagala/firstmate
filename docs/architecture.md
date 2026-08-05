@@ -24,6 +24,9 @@ Its initial normal-mode status signal still surfaces through the no-verb path, w
 Fresh stale panes use the same current-state read before trusting the status log, so an active run or busy pane outranks an old captain-relevant status-log line left behind before validation.
 No-change heartbeats are also benign.
 Absorbed wakes advance their suppression markers, log to `state/.watch-triage.log`, and keep the watcher blocking without a queue record or LLM turn.
+After one exact terminal, decision, or blocker status has been durably queued, the watcher also absorbs later pane-hash churn while that same status remains unchanged and the ordinary non-X ship agent is affirmatively alive.
+A changed status, dead or unreadable agent, X link, authenticated check, or different task kind follows the ordinary actionable path, while declared pauses retain their bounded recheck cadence.
+A bounded home-local `.quiet-stale-suppressed-*` counter measures avoided unchanged-wait model turns; it does not attribute token cost to local polling.
 After each drain, `fm-wake-drain.sh` runs the same liveness guard as the supervision scripts, so a lapsed watcher chain surfaces even on a turn that only drains and handles queued wakes.
 Routine watcher polling, supervision no-ops, elapsed waiting time, and absorbed benign wakes stay silent.
 A declared external wait trades that silence for one bounded recheck per pause window, so a forgotten pause cannot remain invisible indefinitely.
@@ -125,6 +128,20 @@ Only a named non-default branch checked out in `FM_ROOT` is a worktree tangle.
 `fm-guard.sh` prints the repair command on the next mutable fleet action, while `bin/fm-session-start.sh` reports the same condition through bootstrap as a `TANGLE:` line at session start.
 If another live session holds the fleet lock, both surfaces keep the alarm but switch to read-only wording with no repair command.
 Ship briefs also tell the crewmate to verify `pwd -P` and `git rev-parse --show-toplevel` before creating `fm/<id>`, then stop with a blocked status if it landed in the primary checkout.
+
+## Fresh-session objective rollover
+
+`bin/fm-rollover.sh` is the single owner of `fm-rollover-capsule.v1` and the in-place ordinary-task rollover transaction.
+The first supported path is an ordinary Pi or pi-signed ship on tmux because that combination can prove a live recorded owner, cleanly exit to the same shell endpoint, preserve the exact isolated worktree, and publish a new process-bound generation marker from a Pi extension.
+Every scout, secondmate, other harness, and other backend is rejected before the old worker exits.
+The capsule is capped at 8 KiB and contains only the current objective, accepted decisions, fixed immutable constraints, branch/revision and artifact pointers, validation/PR pointers, and explicit superseded-instruction markers.
+It never copies historical instructions, reports, chats, logs, private prompts, source, or secret-shaped input.
+The tracked Pi guard binds the capsule bytes and generation at launch, blocks every tool except `fm_rollover_ack` until the exact objective digest is acknowledged, and rejects stale generations.
+Identical retries are no-ops when the same generation-bound fresh-session proof is still live.
+The transaction hashes the worktree status before and after, never runs reset/stash/clean/checkout, and stops if endpoint, process, capsule, or worktree preservation cannot be proven.
+Expected benefit is lower first-turn and peak context plus zero superseded-instruction actions; the trade-off is explicit capsule preparation and Pi/tmux-only initial support.
+Measure first-turn/peak context from existing Pi records, obsolete actions from task evidence, and unchanged-wait turns avoided from the bounded suppression counters.
+Roll back the rollover path if two migrations omit necessary context, and roll back quiet-wait suppression if any changed or actionable event is missed or delayed.
 
 ## No-mistakes gate authority boundary
 

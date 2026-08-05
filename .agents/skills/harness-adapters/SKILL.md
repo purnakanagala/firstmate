@@ -47,7 +47,21 @@ A captain override always beats detection.
 When verifying a new adapter, record its env marker and command name in `bin/fm-harness.sh`.
 
 For stuck recovery, the target window's harness is recorded as `harness=` in `state/<id>.meta`.
-Use that value for interrupt, exit, resume, and skill-invocation facts.
+Use that value for interrupt, exit, resume, rollover, and skill-invocation facts.
+
+## Fresh-session ordinary-task rollover
+
+Load this skill before invoking `bin/fm-rollover.sh`.
+The script currently supports only an ordinary `kind=ship` worker recorded as `pi` or `pi-signed` on the tmux backend.
+It exits the current Pi session cleanly, retains the exact endpoint and isolated worktree, launches a new Pi process with a generation-bound current-objective capsule, and requires the fresh worker to call `fm_rollover_ack` before any other tool.
+The existing task Pi turn-end extension remains loaded, and no-mistakes ownership and response mechanics do not change.
+A byte-bounded capsule stores pointers rather than brief, report, chat, log, prompt, or source content.
+Repeated invocation with the same capsule semantics and matching live fresh-session proof is a no-op.
+
+The verified harness review is explicit: Claude, Codex, OpenCode, Grok, and Kimi are rejected because none currently has the Pi rollover guard and generation acknowledgment surface; scouts and secondmates are rejected because their lifecycle owners differ from ordinary ships.
+The verified backend review is also explicit: Herdr, Zellij, Orca, and cmux are rejected because current adapters do not jointly prove an in-place fresh agent identity, unchanged endpoint ownership, and preserved worktree bytes for this operation.
+Do not emulate rollover through `fm-send`, a resume command, a replacement spawn, or manual endpoint lifecycle commands.
+If any recorded identity, endpoint, agent liveness, worktree root, generation, capsule digest, or post-launch worktree hash is ambiguous, preserve the existing copy and escalate instead of retrying on another runtime.
 
 ## Primary turn-end guard
 
