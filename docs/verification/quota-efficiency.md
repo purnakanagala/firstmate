@@ -5,7 +5,9 @@
 **Verified:** 2026-08-05.
 
 The current guarantee is behavioral rather than a claim that local polling consumes tokens.
-The rollover regression uses fake tmux and Pi surfaces, never a provider call, and proves fresh generation publication, capsule acknowledgment enforcement, unchanged worktree bytes, idempotent retry, and refusal boundaries.
+The rollover regression uses fake tmux and Pi surfaces, never a provider call, and proves the shell transaction, process-bound generation publication, capsule acknowledgment enforcement, unchanged complete worktree payload, idempotent retry, and refusal boundaries.
+It does not establish that the installed Pi or pi-signed harness loads and enforces the new guard because neither executable was available in the verification environment.
+The rollover pre-tool boundary must remain unverified until both real harness paths are exercised provider-free and this record contains their exact versions, commands, and output.
 The watcher regression proves that an unchanged already-delivered quiet status absorbs later pane-hash churn only while the ordinary non-X ship agent is affirmatively alive, while changed status and unsafe liveness still surface.
 
 Commands:
@@ -14,6 +16,8 @@ Commands:
 tests/fm-rollover.test.sh
 tests/fm-watch-triage.test.sh
 tests/fm-pi-primary-types.test.sh
+command -v pi
+command -v pi-signed
 bin/fm-doc-audience-check.sh
 bin/fm-lint.sh
 ```
@@ -23,7 +27,9 @@ Expected output:
 ```text
 # fm-rollover.test.sh: all assertions passed
 # fm-watch-triage.test.sh: all assertions passed
-ok - tracked Pi extensions pass strict no-emit typecheck against Pi <installed-version>
+skip: tsc not found for Pi extension typecheck
+command -v pi: exit 1, no output
+command -v pi-signed: exit 1, no output
 documentation audience check: ok
 lint: ok
 ```

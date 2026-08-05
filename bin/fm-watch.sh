@@ -362,7 +362,7 @@ quiet_wait_stale_absorbed() {  # <window> <task> <hash>
     printf '%s\n' "$count" > "$count_file"
   fi
   printf '%s' "$h" > "$STATE/.stale-$key"
-  rm -f "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key"
+  wedge_timer_check "$win" "$STATE/.stale-since-$key" "unchanged delivered quiet status" "$STATE/.wedge-escalations-$key"
   triage_log "absorbed stale (unchanged delivered quiet status): $win"
   return 0
 }

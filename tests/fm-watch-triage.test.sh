@@ -458,6 +458,17 @@ test_quiet_terminal_hash_churn_absorbed_then_changed_status_surfaces() {
   [ -s "$state/.quiet-stale-suppressed-$key" ] || { reap "$pid"; fail "quiet stale suppression counter was not recorded"; }
   [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "quiet hash churn enqueued an event"; }
 
+  printf '%s\n' $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  wait_for_exit "$pid" 40 || { reap "$pid"; fail "unchanged delivered decision hid a genuine wedge"; }
+  grep -F "possible wedge" "$out" >/dev/null || fail "quiet-status wedge escalation omitted its reason"
+
+  : > "$out"
+  printf 'idle terminal frame three\n' > "$capture_file"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_FAKE_TMUX_CURRENT_COMMAND=pi FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+
   printf 'blocked: credential login is now required\n' >> "$state/quiet-terminal.status"
   wait_for_exit "$pid" 40 || { reap "$pid"; fail "changed actionable status did not wake after quiet suppression"; }
   grep -F "signal: $state/quiet-terminal.status" "$out" >/dev/null \

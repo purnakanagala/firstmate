@@ -136,6 +136,10 @@ fm_backend_tmux_current_command() {  # <target>
   tmux display-message -p -t "$1" '#{pane_current_command}' 2>/dev/null
 }
 
+fm_backend_tmux_pane_pid() {  # <target>
+  tmux display-message -p -t "$1" '#{pane_pid}' 2>/dev/null
+}
+
 # fm_backend_tmux_agent_state: recovery-grade harness-agent state for one
 # recorded target. See bin/fm-backend.sh's fm_backend_agent_state for the
 # shared state vocabulary and docs/tmux-backend.md "Agent liveness probe" for

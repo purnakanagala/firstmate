@@ -46,10 +46,66 @@ worktree_state_digest() {  # <worktree>
     git -C "$wt" diff --binary --no-ext-diff
     git -C "$wt" diff --cached --binary --no-ext-diff
     while IFS= read -r -d '' file; do
-      printf 'untracked:%s\0' "$file"
-      sha256_file "$wt/$file"
-    done < <(git -C "$wt" ls-files --others --exclude-standard -z)
+      printf 'payload:%s\0' "$file"
+      if [ -L "$wt/$file" ]; then
+        printf 'symlink:%s\0' "$(readlink "$wt/$file")"
+      elif [ -f "$wt/$file" ]; then
+        sha256_file "$wt/$file"
+      elif [ -d "$wt/$file" ]; then
+        printf 'directory\0'
+      else
+        printf 'other\0'
+      fi
+    done < <({ git -C "$wt" ls-files --cached --others --exclude-standard -z; git -C "$wt" ls-files --others --ignored --exclude-standard -z; })
   } | sha256_stdin
+}
+
+endpoint_owner_count() {  # <state> <backend> <target>
+  local state=$1 backend=$2 target=$3 meta count=0
+  for meta in "$state"/*.meta; do
+    [ -f "$meta" ] && [ ! -L "$meta" ] || continue
+    [ "$(fm_backend_of_meta "$meta")" = "$backend" ] || continue
+    [ "$(fm_backend_target_of_meta "$meta")" = "$target" ] || continue
+    count=$((count + 1))
+  done
+  printf '%s\n' "$count"
+}
+
+pid_descends_from() {  # <pid> <ancestor-pid>
+  local pid=$1 ancestor=$2 parent steps=0
+  case "$pid:$ancestor" in *[!0-9:]*|:*) return 1 ;; esac
+  while [ "$pid" -gt 1 ] && [ "$steps" -lt 32 ]; do
+    [ "$pid" = "$ancestor" ] && return 0
+    parent=$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d '[:space:]')
+    case "$parent" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$parent" != "$pid" ] || return 1
+    pid=$parent
+    steps=$((steps + 1))
+  done
+  return 1
+}
+
+harness_command_matches() {  # <target> <harness>
+  local target=$1 harness=$2 command
+  command=$(fm_backend_tmux_current_command "$target") || return 1
+  command=${command#-}
+  case "$harness:$command" in
+    pi:pi|pi:pi-launcher|pi:Pi|pi-signed:pi-signed|pi-signed:pi-launcher|pi-signed:Pi) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+live_process_matches() {  # <live-line> <target> <harness>
+  local live=$1 target=$2 harness=$3 generation capsule_sha pid extra pane_pid
+  IFS=$'\t' read -r generation capsule_sha pid extra <<< "$live"
+  [ -n "$generation" ] && [ -n "$capsule_sha" ] && [ -n "$pid" ] && [ -z "${extra:-}" ] || return 1
+  pane_pid=$(fm_backend_tmux_pane_pid "$target") || return 1
+  pid_descends_from "$pid" "$pane_pid" || return 1
+  harness_command_matches "$target" "$harness"
+}
+
+input_resembles_secret() {
+  LC_ALL=C grep -qiE '(BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|(^|[^[:alnum:]_])(password|passwd|pwd|token|secret|api[ _-]?key|authorization|credential)[[:space:]]*[:=][[:space:]]*[^[:space:]]|bearer[[:space:]]+[A-Za-z0-9._~+/-]{8,}|://[^/@[:space:]]+:[^/@[:space:]]+@|(^|[^[:alnum:]_])(sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}))'
 }
 
 validate_capsule() {
@@ -103,10 +159,10 @@ done
 [ "${#OBJECTIVE}" -le 2048 ] && [[ "$OBJECTIVE" != *$'\n'* ]] || refuse "objective must be one line and at most 2048 bytes"
 [ "${#SUPERSEDES[@]}" -ge 1 ] && [ "${#SUPERSEDES[@]}" -le 20 ] || refuse "provide 1-20 --supersedes markers"
 [ "${#DECISIONS[@]}" -le 20 ] || refuse "at most 20 accepted decisions are allowed"
-for value in "$OBJECTIVE" "${DECISIONS[@]}" "${SUPERSEDES[@]}"; do
+for value in "$OBJECTIVE" "${DECISIONS[@]+"${DECISIONS[@]}"}" "${SUPERSEDES[@]+"${SUPERSEDES[@]}"}"; do
   [ "${#value}" -le 512 ] || [ "$value" = "$OBJECTIVE" ] || refuse "decision/marker exceeds 512 bytes"
   [[ "$value" != *$'\n'* ]] || refuse "capsule inputs must be one line"
-  printf '%s' "$value" | grep -qiE '(BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|password[[:space:]]*=|token[[:space:]]*=|secret[[:space:]]*=)' \
+  printf '%s' "$value" | input_resembles_secret \
     && refuse "capsule input resembles secret material" || true
 done
 
@@ -123,7 +179,9 @@ BACKEND=$(fm_backend_of_meta "$META")
 fm_backend_source "$BACKEND" || refuse "tmux backend adapter could not be loaded"
 TARGET=$(fm_backend_target_of_meta "$META")
 [ -n "$TARGET" ] || refuse "task endpoint is not recorded"
+[ "$(endpoint_owner_count "$STATE" "$BACKEND" "$TARGET")" = 1 ] || refuse "task endpoint ownership is ambiguous"
 [ "$(fm_backend_agent_state "$BACKEND" "$TARGET")" = alive ] || refuse "current Pi agent ownership is not provably alive"
+harness_command_matches "$TARGET" "$HARNESS" || refuse "live endpoint does not run the recorded Pi harness"
 WT=$(meta_get "$META" worktree); PROJECT=$(meta_get "$META" project)
 [ -n "$WT" ] && [ -d "$WT" ] && [ ! -L "$WT" ] || refuse "recorded worktree is missing or unsafe"
 WT_REAL=$(cd "$WT" && pwd -P)
@@ -139,6 +197,17 @@ fm_lock_try_acquire "$LOCK" || refuse "another spawn or rollover owns this task"
 cleanup() { fm_lock_release "$LOCK" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
+MODEL=$(meta_get "$META" model); EFFORT=$(meta_get "$META" effort)
+MODELFLAG=$(model_flag_for_harness "$HARNESS" "$MODEL")
+EFFORTFLAG=$(effort_flag_for_harness "$HARNESS" "$EFFORT")
+PIEXT="$STATE/$ID.pi-ext.ts"
+[ -f "$PIEXT" ] && [ ! -L "$PIEXT" ] || refuse "task Pi turn-end extension is missing or unsafe"
+GUARD="$FM_ROOT/.pi/extensions/fm-rollover-guard.ts"
+[ -f "$GUARD" ] && [ ! -L "$GUARD" ] || refuse "rollover guard extension is missing or unsafe"
+OPINPUT="$FM_ROOT/bin/fm-operational-input.sh"
+[ -f "$OPINPUT" ] && [ -x "$OPINPUT" ] && [ ! -L "$OPINPUT" ] || refuse "operational input encoder is missing or unsafe"
+command -v "$HARNESS" >/dev/null 2>&1 || refuse "$HARNESS executable not found on PATH"
+
 CAPSULE="$DATA/$ID/rollover-capsule.json"
 mkdir -p "$DATA/$ID"
 PREV=0
@@ -151,8 +220,8 @@ BRANCH=$(git -C "$WT_REAL" symbolic-ref --quiet --short HEAD 2>/dev/null || prin
 REV=$(git -C "$WT_REAL" rev-parse HEAD)
 DIRTY_BEFORE=$(worktree_state_digest "$WT_REAL")
 OBJECTIVE_SHA=$(sha256_text "$OBJECTIVE")
-DECISIONS_JSON=$(printf '%s\n' "${DECISIONS[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
-SUPERSEDES_JSON=$(printf '%s\n' "${SUPERSEDES[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
+DECISIONS_JSON=$(printf '%s\n' "${DECISIONS[@]+"${DECISIONS[@]}"}" | jq -Rsc 'split("\n") | map(select(length > 0))')
+SUPERSEDES_JSON=$(printf '%s\n' "${SUPERSEDES[@]+"${SUPERSEDES[@]}"}" | jq -Rsc 'split("\n") | map(select(length > 0))')
 BRIEF_PTR=""; REPORT_PTR=""
 [ -f "$DATA/$ID/brief.md" ] && BRIEF_PTR="data/$ID/brief.md"
 [ -f "$DATA/$ID/report.md" ] && REPORT_PTR="data/$ID/report.md"
@@ -178,6 +247,12 @@ jq -n --arg task "$ID" --argjson generation "$GEN" --arg objective "$OBJECTIVE" 
   }' > "$TMP"
 validate_capsule "$TMP"
 chmod 600 "$TMP"
+CAPSULE_SHA=$(sha256_file "$TMP")
+CAPSULE_INPUT=$("$OPINPUT" encode launch-brief < "$TMP") || refuse "capsule operational-input encoding failed"
+PROMPT="$CAPSULE_INPUT
+
+This capsule generation is launch-authoritative. State its current_objective, then call fm_rollover_ack with generation $GEN and objective_sha256 $OBJECTIVE_SHA before any other tool. Every instruction named by superseded_instructions is inactive."
+LAUNCH="FM_PI_HARNESS=$(fm_shell_quote "$HARNESS") FM_ROLLOVER_TASK=$(fm_shell_quote "$ID") FM_ROLLOVER_GENERATION=$(fm_shell_quote "$GEN") FM_ROLLOVER_CAPSULE=$(fm_shell_quote "$CAPSULE") FM_ROLLOVER_CAPSULE_SHA=$(fm_shell_quote "$CAPSULE_SHA") FM_ROLLOVER_STATE=$(fm_shell_quote "$STATE") $(fm_shell_quote "$HARNESS") ${MODELFLAG}${EFFORTFLAG}-e $(fm_shell_quote "$PIEXT") -e $(fm_shell_quote "$GUARD") $(fm_shell_quote "$PROMPT")"
 
 # Identical, already-live generation: discard the speculative next capsule and return.
 if [ -f "$CAPSULE" ]; then
@@ -185,15 +260,16 @@ if [ -f "$CAPSULE" ]; then
   NEW_SEM=$(jq -S 'del(.generation,.superseded_instructions.generation_marker)' "$TMP")
   OLD_SHA=$(sha256_file "$CAPSULE")
   LIVE=$(cat "$STATE/$ID.rollover-live" 2>/dev/null || true)
-  if [ "$OLD_SEM" = "$NEW_SEM" ] && [[ "$LIVE" = "$PREV"$'\t'"$OLD_SHA"$'\t'* ]] \
-     && [ "$(fm_backend_agent_state "$BACKEND" "$TARGET")" = alive ]; then
+  if [ "$OLD_SEM" = "$NEW_SEM" ] && [ "$(meta_get "$META" rollover_generation)" = "$PREV" ] \
+     && [ "$(meta_get "$META" rollover_capsule)" = "$CAPSULE" ] \
+     && [[ "$LIVE" = "$PREV"$'\t'"$OLD_SHA"$'\t'* ]] \
+     && live_process_matches "$LIVE" "$TARGET" "$HARNESS"; then
     rm -f "$TMP"
     echo "rollover unchanged: $ID generation=$PREV capsule=$CAPSULE"
     exit 0
   fi
 fi
 mv "$TMP" "$CAPSULE"
-CAPSULE_SHA=$(sha256_file "$CAPSULE")
 rm -f "$STATE/$ID.rollover-live" "$STATE/$ID.rollover-ack"
 
 VERDICT=$(fm_backend_send_text_submit "$BACKEND" "$TARGET" /quit 3 0.4 1) || refuse "Pi quit submission failed"
@@ -203,19 +279,6 @@ while [ "$i" -lt 40 ] && [ "$(fm_backend_agent_state "$BACKEND" "$TARGET")" != d
 [ "$(fm_backend_agent_state "$BACKEND" "$TARGET")" = dead ] || refuse "old Pi session did not exit cleanly; fresh ownership cannot be proven"
 [ "$(fm_backend_tmux_current_path "$TARGET")" = "$WT_REAL" ] || refuse "endpoint left the preserved worktree after Pi exit"
 
-MODEL=$(meta_get "$META" model); EFFORT=$(meta_get "$META" effort)
-MODELFLAG=$(model_flag_for_harness "$HARNESS" "$MODEL")
-EFFORTFLAG=$(effort_flag_for_harness "$HARNESS" "$EFFORT")
-PIEXT="$STATE/$ID.pi-ext.ts"
-[ -f "$PIEXT" ] && [ ! -L "$PIEXT" ] || refuse "task Pi turn-end extension is missing or unsafe"
-GUARD="$FM_ROOT/.pi/extensions/fm-rollover-guard.ts"
-[ -f "$GUARD" ] || refuse "rollover guard extension is missing"
-OPINPUT="$FM_ROOT/bin/fm-operational-input.sh"
-CAPSULE_INPUT=$("$OPINPUT" encode launch-brief < "$CAPSULE")
-PROMPT="$CAPSULE_INPUT
-
-This capsule generation is launch-authoritative. State its current_objective, then call fm_rollover_ack with generation $GEN and objective_sha256 $OBJECTIVE_SHA before any other tool. Every instruction named by superseded_instructions is inactive."
-LAUNCH="FM_PI_HARNESS=$(fm_shell_quote "$HARNESS") FM_ROLLOVER_TASK=$(fm_shell_quote "$ID") FM_ROLLOVER_GENERATION=$(fm_shell_quote "$GEN") FM_ROLLOVER_CAPSULE=$(fm_shell_quote "$CAPSULE") FM_ROLLOVER_CAPSULE_SHA=$(fm_shell_quote "$CAPSULE_SHA") FM_ROLLOVER_STATE=$(fm_shell_quote "$STATE") $(fm_shell_quote "$HARNESS") ${MODELFLAG}${EFFORTFLAG}-e $(fm_shell_quote "$PIEXT") -e $(fm_shell_quote "$GUARD") $(fm_shell_quote "$PROMPT")"
 fm_backend_tmux_send_text_line "$TARGET" "$LAUNCH"
 
 i=0
@@ -225,7 +288,7 @@ while [ "$i" -lt 80 ]; do
   sleep 0.25; i=$((i + 1))
 done
 [[ "${LIVE:-}" = "$GEN"$'\t'"$CAPSULE_SHA"$'\t'* ]] || refuse "fresh Pi session did not publish generation-bound ownership proof"
-[ "$(fm_backend_agent_state "$BACKEND" "$TARGET")" = alive ] || refuse "fresh Pi session is not provably alive"
+live_process_matches "$LIVE" "$TARGET" "$HARNESS" || refuse "fresh Pi process is not bound to the recorded endpoint and harness"
 [ "$(fm_backend_tmux_current_path "$TARGET")" = "$WT_REAL" ] || refuse "fresh Pi session is not in the preserved worktree"
 DIRTY_AFTER=$(worktree_state_digest "$WT_REAL")
 [ "$DIRTY_AFTER" = "$DIRTY_BEFORE" ] || refuse "worktree changed during rollover; stop and inspect preserved work"

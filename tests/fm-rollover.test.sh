@@ -25,6 +25,8 @@ git -C "$WT" add tracked.txt
 git -C "$WT" commit -qm base
 printf 'unlanded\n' >> "$WT/tracked.txt"
 printf 'untracked work\n' > "$WT/untracked note.txt"
+printf '.private-cache\n' > "$WT/.gitignore"
+printf 'ignored work\n' > "$WT/.private-cache"
 printf '// turn end\n' > "$HOME1/state/task.pi-ext.ts"
 printf 'historical instructions never copied\n' > "$HOME1/data/task/brief.md"
 cat > "$HOME1/state/task.meta" <<EOF
@@ -52,6 +54,7 @@ case "$1" in
     fmt=${!#}
     case "$fmt" in
       '#{pane_current_command}') cat "$root/agent" ;;
+      '#{pane_pid}') printf '4100\n' ;;
       '#{pane_current_path}') printf '%s\n' "$FM_FAKE_WT" ;;
       '#{pane_id}') printf '%%1\n' ;;
       '#{cursor_y}') printf '1\n' ;;
@@ -76,6 +79,7 @@ case "$1" in
           task=$(printf '%s' "$command" | sed -n "s/.*FM_ROLLOVER_TASK='\([^']*\)'.*/\1/p")
           printf 'pi\n' > "$root/agent"
           printf '%s\t%s\t4242\n' "$gen" "$sha" > "$state/$task.rollover-live"
+          if [ "${FM_FAKE_MUTATE_IGNORED:-0}" = 1 ]; then printf 'changed during launch\n' > "$FM_FAKE_WT/.private-cache"; fi
           printf 'launch\n' >> "$root/launches"
           ;;
       esac
@@ -85,6 +89,19 @@ case "$1" in
 esac
 SH
 chmod +x "$FAKEBIN/tmux"
+cat > "$FAKEBIN/ps" <<'SH'
+#!/usr/bin/env bash
+set -eu
+case "$*" in
+  '-p 4242 -o ppid=') printf '4100\n' ;;
+  '-p 4100 -o ppid=') printf '1\n' ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$FAKEBIN/ps"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKEBIN/pi"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKEBIN/pi-signed"
+chmod +x "$FAKEBIN/pi" "$FAKEBIN/pi-signed"
 
 run_rollover() {
   PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" \
@@ -93,6 +110,13 @@ run_rollover() {
     --decision 'Keep no-mistakes authority unchanged.' \
     --supersedes 'brief-generation-0' --supersedes 'obsolete recovery instruction'
 }
+
+mv "$FAKEBIN/pi" "$FAKEBIN/pi.missing"
+if run_rollover >/dev/null 2>&1; then fail "missing Pi executable did not refuse during preflight"; fi
+[ "$(cat "$TMP/agent")" = pi ] || fail "preflight failure exited the existing Pi worker"
+[ ! -e "$HOME1/data/task/rollover-capsule.json" ] || fail "preflight failure published a capsule"
+mv "$FAKEBIN/pi.missing" "$FAKEBIN/pi"
+pass "launch dependencies are preflighted before capsule publication or worker exit"
 
 BEFORE=$(git -C "$WT" status --porcelain=v1)
 OUT=$(run_rollover)
@@ -109,16 +133,22 @@ CAPSULE="$HOME1/data/task/rollover-capsule.json"
 [ "$(jq -r '.superseded_instructions.markers | length' "$CAPSULE")" = 2 ] || fail "superseded markers missing"
 [ "$(grep -c '^launch$' "$TMP/launches")" = 1 ] || fail "first rollover did not launch exactly once"
 
+cp "$HOME1/state/task.meta" "$HOME1/state/duplicate.meta"
+if run_rollover >/dev/null 2>&1; then fail "ambiguous duplicate endpoint ownership was not refused"; fi
+rm "$HOME1/state/duplicate.meta"
+
 OUT=$(run_rollover)
 printf '%s' "$OUT" | grep -F 'rollover unchanged' >/dev/null || fail "identical retry was not idempotent: $OUT"
 [ "$(grep -c '^launch$' "$TMP/launches")" = 1 ] || fail "idempotent retry launched another session"
 [ "$(jq -r '.generation' "$CAPSULE")" = 1 ] || fail "idempotent retry advanced generation"
 sed 's/^harness=pi$/harness=pi-signed/' "$HOME1/state/task.meta" > "$TMP/meta.signed"
 mv "$TMP/meta.signed" "$HOME1/state/task.meta"
+printf 'pi-signed\n' > "$TMP/agent"
 OUT=$(run_rollover)
 printf '%s' "$OUT" | grep -F 'rollover unchanged' >/dev/null || fail "pi-signed did not share the verified guarded path"
 sed 's/^harness=pi-signed$/harness=pi/' "$HOME1/state/task.meta" > "$TMP/meta.pi"
 mv "$TMP/meta.pi" "$HOME1/state/task.meta"
+printf 'pi\n' > "$TMP/agent"
 pass "fresh Pi session proof, Pi-signed parity, bounded capsule, unlanded-work preservation, and idempotent retry"
 
 cp "$CAPSULE" "$TMP/tampered.json"
@@ -131,6 +161,14 @@ for needle in 'event.toolName === "fm_rollover_ack"' 'if (!acknowledged())' 'cap
     || fail "Pi guard lost required generation/ack enforcement: $needle"
 done
 pass "generation mismatch and pre-tool acknowledgment enforcement"
+
+for secret in 'password: hunter2' 'Authorization: Bearer abcdefghijkl' 'https://user:pass@example.test/path' 'sk-abcdefghijklmnop' 'ghp_abcdefghijklmnop'; do
+  if PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" FM_HOME="$HOME1" FM_ROOT_OVERRIDE="$ROOT" \
+    "$ROOT/bin/fm-rollover.sh" task --objective "$secret" --supersedes old >/dev/null 2>&1; then
+    fail "secret-shaped capsule input was accepted: $secret"
+  fi
+done
+pass "common secret forms are refused before capsule publication"
 
 refusal_case() {
   local label=$1 replacement=$2
@@ -161,5 +199,13 @@ if PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" FM_HOME="$HOM
 fi
 [ ! -e "$HOME2/data/task/rollover-capsule.json" ] || fail "sibling home received rollover state"
 pass "multi-home isolation"
+
+if MUTATE_OUT=$(PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" FM_FAKE_MUTATE_IGNORED=1 \
+  FM_HOME="$HOME1" FM_ROOT_OVERRIDE="$ROOT" "$ROOT/bin/fm-rollover.sh" task \
+  --objective 'A changed bounded objective.' --supersedes prior 2>&1); then
+  fail "ignored worktree mutation during launch was not detected"
+fi
+[ "$(cat "$WT/.private-cache")" = 'changed during launch' ] || fail "ignored mutation case stopped before launch: $MUTATE_OUT"
+pass "ignored worktree bytes are included in preservation proof"
 
 echo "# fm-rollover.test.sh: all assertions passed"
