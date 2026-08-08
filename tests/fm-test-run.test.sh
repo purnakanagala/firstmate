@@ -119,6 +119,7 @@ init_changed_fixture_repo() {
   : >"$repo/tests/lib.sh"
   : >"$repo/tests/fm-backend-herdr-eventwait.test.py"
   : >"$repo/bin/fm-supervisor-target-lib.sh"
+  printf '14\n' >"$repo/bin/herdr-min-protocol"
   : >"$repo/bin/unmapped-source.sh"
   printf '# .claude/settings.json\n# .pi/extensions/fm-primary-turnend-guard.ts\n' \
     >>"$repo/tests/fm-cd-pretool-check.test.sh"
@@ -154,6 +155,14 @@ test_changed_dependency_selection_and_unmapped_failure() {
   assert_contains "$listed" "tests/fm-backend.test.sh" "eventwait test selects backend coverage"
   git -C "$repo" add tests/fm-backend-herdr-eventwait.test.py
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm eventwait-change
+
+  printf '15\n' >"$repo/bin/herdr-min-protocol"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  assert_contains "$listed" "tests/fm-backend-herdr-smoke.test.sh" "protocol floor selects real Herdr coverage"
+  assert_contains "$listed" "tests/fm-backend.test.sh" "protocol floor selects backend dispatch coverage"
+  assert_contains "$listed" "tests/fm-brief.test.sh" "protocol floor selects contract coverage"
+  git -C "$repo" add bin/herdr-min-protocol
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm protocol-floor-change
 
   printf '\n' >>"$repo/bin/fm-supervisor-target-lib.sh"
   listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)

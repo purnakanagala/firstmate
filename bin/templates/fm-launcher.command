@@ -715,9 +715,24 @@ if [ "$MODE" = adopt-current ]; then
   # Process-info proof that a real pi process is actually running in this
   # exact pane (not just a shell that happens to be labeled cwd-correct).
   procinfo=$(hcli pane process-info --pane "$cur_pane" 2>/dev/null)
-  pi_present=$(printf '%s' "$procinfo" | jq -r --arg n "$FM_LAUNCHER_HARNESS" '
-    [.result.process_info.foreground_processes[]? | select(.argv0==$n or .name==$n)] | length > 0')
-  [ "$pi_present" = true ] || die "adopt-current: process-info for pane $cur_pane shows no live '$FM_LAUNCHER_HARNESS' process in its foreground process tree - refusing to adopt an unproven pane"
+  pi_present=$(printf '%s' "$procinfo" | jq -r \
+    --arg n "$FM_LAUNCHER_HARNESS" \
+    --arg model "$FM_LAUNCHER_MODEL" \
+    --arg thinking "$FM_LAUNCHER_THINKING" '
+    def flag_values($argv; $flag):
+      [$argv as $args
+       | range(0; ($args | length)) as $i
+       | select($args[$i] == $flag and ($i + 1) < ($args | length))
+       | $args[$i + 1]];
+    [.result.process_info.foreground_processes[]?
+     | select(.argv0 == $n or .name == $n)
+     | .argv as $argv
+     | select(($argv | type) == "array" and all($argv[]; type == "string"))
+     | select(flag_values($argv; "--model") == [$model])
+     | select(flag_values($argv; "--thinking") == [$thinking])]
+    | length == 1
+  ' 2>/dev/null)
+  [ "$pi_present" = true ] || die "adopt-current: process-info for pane $cur_pane does not prove exactly one live '$FM_LAUNCHER_HARNESS' process with model '$FM_LAUNCHER_MODEL' and thinking '$FM_LAUNCHER_THINKING' - refusing to adopt an unpinned pane"
   write_identity_journal "$cur_ws" "$cur_tab" "$cur_pane" "$cur_term" \
     || die "adopt-current: could not persist the identity journal"
   log INFO "adopt-current: seeded identity journal from live self-verified primary (ws=$cur_ws tab=$cur_tab pane=$cur_pane term=$cur_term)"

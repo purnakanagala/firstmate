@@ -59,7 +59,7 @@ if [ "${1:-}" = "--offline" ] && [ "${2:-}" = "--list-models" ]; then
   echo "$prov $mid 1K context 1K max-out thinking=yes images=no"
   exit 0
 fi
-exec -a pi /bin/bash --norc --noprofile -c 'while true; do sleep 3600; done'
+exec -a pi /bin/bash --norc --noprofile -c 'while true; do sleep 3600; done' pi "$@"
 EOF
 chmod +x "$FAKE_PI"
 
@@ -309,7 +309,7 @@ WS5=$(printf '%s' "$WS5OUT" | jq -r '.result.workspace.workspace_id')
 TAB5OUT=$(HERDR_SESSION="$SESSION" herdr tab create --workspace "$WS5" --cwd "$HOME5" --label fm-primary --no-focus --session "$SESSION")
 TAB5=$(printf '%s' "$TAB5OUT" | jq -r '.result.tab.tab_id')
 PANE5=$(printf '%s' "$TAB5OUT" | jq -r '.result.root_pane.pane_id')
-HERDR_SESSION="$SESSION" herdr pane run "$PANE5" "'$FAKE_PI' --model foo --thinking low" --session "$SESSION" >/dev/null
+HERDR_SESSION="$SESSION" herdr pane run "$PANE5" "'$FAKE_PI' --model openai-codex/gpt-5.6-sol --thinking low" --session "$SESSION" >/dev/null
 sleep 1
 
 ADOPT_OK=$(HERDR_WORKSPACE_ID="$WS5" HERDR_TAB_ID="$TAB5" HERDR_PANE_ID="$PANE5" \
@@ -336,6 +336,22 @@ HERDR_WORKSPACE_ID="$WS5" HERDR_TAB_ID="$TAB5" HERDR_PANE_ID="w9:pfake" \
 RC_ADOPT_BAD=$?
 [ "$RC_ADOPT_BAD" -ne 0 ] || fail "adopt-current must refuse when HERDR_PANE_ID does not match Herdr's own self-report"
 pass "launcher: --adopt-current refuses a mismatched/unproven pane identity"
+
+HOME5PIN=$(new_home s5pin launcher-s5pin)
+WS5PINOUT=$(HERDR_SESSION="$SESSION" herdr workspace create --cwd "$HOME5PIN" --label launcher-s5pin --no-focus --session "$SESSION")
+WS5PIN=$(printf '%s' "$WS5PINOUT" | jq -r '.result.workspace.workspace_id')
+TAB5PINOUT=$(HERDR_SESSION="$SESSION" herdr tab create --workspace "$WS5PIN" --cwd "$HOME5PIN" --label fm-primary --no-focus --session "$SESSION")
+TAB5PIN=$(printf '%s' "$TAB5PINOUT" | jq -r '.result.tab.tab_id')
+PANE5PIN=$(printf '%s' "$TAB5PINOUT" | jq -r '.result.root_pane.pane_id')
+HERDR_SESSION="$SESSION" herdr pane run "$PANE5PIN" "'$FAKE_PI' --model wrong/provider-model --thinking low" --session "$SESSION" >/dev/null
+sleep 1
+ADOPT_PIN=$(HERDR_WORKSPACE_ID="$WS5PIN" HERDR_TAB_ID="$TAB5PIN" HERDR_PANE_ID="$PANE5PIN" \
+  run_launcher "$HOME5PIN" "$QUOTA_POISON" --adopt-current 2>&1)
+RC_ADOPT_PIN=$?
+[ "$RC_ADOPT_PIN" -ne 0 ] || fail "adopt-current must refuse a live Pi process whose model pin differs from config"
+assert_contains "$ADOPT_PIN" "unpinned pane" "runtime-pin refusal must identify the unproven pin"
+[ ! -e "$HOME5PIN/state/.fm-launcher-primary-identity" ] || fail "runtime-pin refusal must not write an identity journal"
+pass "launcher: --adopt-current proves the live Pi model and reasoning arguments"
 
 HOME5C=$(new_home s5c launcher-s5c)
 WS5COUT=$(HERDR_SESSION="$SESSION" herdr workspace create --cwd "$HOME5C" --label launcher-s5c --no-focus --session "$SESSION")
