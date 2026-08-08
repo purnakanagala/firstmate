@@ -62,6 +62,9 @@ case "$MODEL" in
   */*) ;;
   *) die "$CONF_SOURCE: 'model' must be '<provider>/<model-id>', got '$MODEL'" ;;
 esac
+case "$MODEL" in
+  [Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]/*) die "$CONF_SOURCE: model provider 'anthropic' is forbidden because this launcher routes models through Pi" ;;
+esac
 [ -n "$THINKING" ] || die "$CONF_SOURCE is missing required field 'thinking'"
 case "$THINKING" in
   low|medium|high|xhigh|max) ;;
@@ -76,7 +79,8 @@ esac
 [ -n "$QUOTA_PROVIDER" ] || die "$CONF_SOURCE is missing required field 'quota_provider' (e.g. quota_provider=codex)"
 QUOTA_RESERVE_PERCENT="${QUOTA_RESERVE_PERCENT:-25}"
 case "$QUOTA_RESERVE_PERCENT" in
-  ''|*[!0-9]*) die "$CONF_SOURCE: 'quota_reserve_percent' must be a plain integer, got '$QUOTA_RESERVE_PERCENT'" ;;
+  0|[1-9]|[1-9][0-9]|100) ;;
+  *) die "$CONF_SOURCE: 'quota_reserve_percent' must be a canonical integer from 0 through 100, got '$QUOTA_RESERVE_PERCENT'" ;;
 esac
 WORKSPACE_LABEL="${WORKSPACE_LABEL:-firstmate}"
 TAB_LABEL="${TAB_LABEL:-fm-primary}"

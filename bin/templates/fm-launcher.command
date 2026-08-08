@@ -37,8 +37,6 @@ set -o pipefail
 
 readonly FM_LAUNCHER_HARNESS="pi"
 readonly FM_LAUNCHER_BACKEND="herdr"
-# Same floor bin/backends/herdr.sh's FM_BACKEND_HERDR_MIN_PROTOCOL enforces.
-readonly FM_LAUNCHER_MIN_PROTOCOL=14
 readonly FM_LAUNCHER_LOG_MAX_BYTES=204800
 
 # ---------------------------------------------------------------------------
@@ -96,13 +94,20 @@ CONF_QUOTA_RESERVE_PERCENT="${CONF_QUOTA_RESERVE_PERCENT:-25}"
 CONF_WORKSPACE_LABEL="${CONF_WORKSPACE_LABEL:-firstmate}"
 CONF_TAB_LABEL="${CONF_TAB_LABEL:-fm-primary}"
 case "$CONF_QUOTA_RESERVE_PERCENT" in
-  ''|*[!0-9]*) echo "error: launcher config quota_reserve_percent must be a plain integer, got '$CONF_QUOTA_RESERVE_PERCENT'" >&2; exit 1 ;;
+  0|[1-9]|[1-9][0-9]|100) ;;
+  *) echo "error: launcher config quota_reserve_percent must be a canonical integer from 0 through 100, got '$CONF_QUOTA_RESERVE_PERCENT'" >&2; exit 1 ;;
 esac
 
 readonly FM_LAUNCHER_MODEL="$CONF_MODEL"
 FM_LAUNCHER_MODEL_PROVIDER="${CONF_MODEL%%/*}"
 FM_LAUNCHER_MODEL_ID="${CONF_MODEL#*/}"
 readonly FM_LAUNCHER_MODEL_PROVIDER FM_LAUNCHER_MODEL_ID
+case "$FM_LAUNCHER_MODEL_PROVIDER" in
+  [Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc])
+    echo "error: launcher config model provider 'anthropic' is forbidden because this launcher routes models through Pi" >&2
+    exit 1
+    ;;
+esac
 readonly FM_LAUNCHER_THINKING="$CONF_THINKING"
 readonly FM_LAUNCHER_WORKSPACE_LABEL="$CONF_WORKSPACE_LABEL"
 readonly FM_LAUNCHER_TAB_LABEL="$CONF_TAB_LABEL"
@@ -133,6 +138,13 @@ if [ ! -f "$FM_HOME/AGENTS.md" ] || [ ! -d "$FM_HOME/bin" ]; then
   echo "error: resolved Firstmate home '$FM_HOME' does not look like a Firstmate checkout (missing AGENTS.md or bin/); refusing to start" >&2
   exit 1
 fi
+
+FM_LAUNCHER_MIN_PROTOCOL=$(cat "$FM_HOME/bin/herdr-min-protocol" 2>/dev/null) \
+  || { echo "error: could not read the shared Herdr protocol floor from $FM_HOME/bin/herdr-min-protocol" >&2; exit 1; }
+case "$FM_LAUNCHER_MIN_PROTOCOL" in
+  ''|*[!0-9]*) echo "error: invalid Herdr protocol floor in $FM_HOME/bin/herdr-min-protocol" >&2; exit 1 ;;
+esac
+readonly FM_LAUNCHER_MIN_PROTOCOL
 
 STATE_DIR="$FM_HOME/state"
 mkdir -p "$STATE_DIR" 2>/dev/null || { echo "error: could not create/access $STATE_DIR" >&2; exit 1; }
@@ -304,13 +316,20 @@ check_quota() {
   # Every included account/weekly window individually - the configured
   # reserve floor, checked on every window that bounds ordinary included
   # usage (never the unlimited-credits/pay-per-use surface).
-  local low_window remaining_report
-  low_window=$(printf '%s' "$out" | jq -r --argjson floor "$FM_LAUNCHER_QUOTA_RESERVE_PERCENT" '
-    [.providers[0].windows[]? | select(.kind=="weekly" or .kind=="session") | select((.percentRemaining // 100) < $floor) | (.id+"="+((.percentRemaining // 0)|tostring)+"%")] | join(",")
-  ')
-  remaining_report=$(printf '%s' "$out" | jq -r '
-    [.providers[0].windows[]? | select(.kind=="weekly" or .kind=="session") | (.id+"="+((.percentRemaining // 0)|tostring)+"%")] | join(",")
-  ')
+  local windows low_window remaining_report
+  windows=$(printf '%s' "$out" | jq -ce '
+    [.providers[0].windows[]? | select(.kind=="weekly" or .kind=="session")]
+    | select(length > 0)
+    | select(all(.[]; (.id | type) == "string" and (.id | length) > 0 and
+                      (.percentRemaining | type) == "number" and
+                      .percentRemaining >= 0 and .percentRemaining <= 100))
+  ' 2>/dev/null) || die "$FM_LAUNCHER_QUOTA_PROVIDER quota payload has no valid included usage windows with numeric percentRemaining values - refusing to launch on unknown availability"
+  low_window=$(printf '%s' "$windows" | jq -er --argjson floor "$FM_LAUNCHER_QUOTA_RESERVE_PERCENT" '
+    [.[] | select(.percentRemaining < $floor) | (.id+"="+(.percentRemaining|tostring)+"%")] | join(",")
+  ' 2>/dev/null) || die "could not evaluate the configured quota reserve floor"
+  remaining_report=$(printf '%s' "$windows" | jq -er '
+    [.[] | (.id+"="+(.percentRemaining|tostring)+"%")] | join(",")
+  ' 2>/dev/null) || die "could not summarize the configured quota windows"
   if [ -n "$low_window" ]; then
     die "$FM_LAUNCHER_QUOTA_PROVIDER included window(s) below the configured ${FM_LAUNCHER_QUOTA_RESERVE_PERCENT}% reserve floor: $low_window - refusing to start the Pi primary (never falls back to paid extra usage). Wait for the window to reset, or start Firstmate manually once quota has recovered."
   fi
@@ -391,8 +410,9 @@ session_exists() {
 WS_ID=""; TAB_ID=""; PANE_ID=""; TERMINAL_ID=""; STATE=""
 SESSION_LOCK_FILE="$FM_HOME/state/.lock"
 
-read_identity_journal() {  # sets J_* globals; returns 1 if absent/unreadable/malformed
+read_identity_journal() {  # sets J_* globals; returns 1 if absent, 2 if unreadable/malformed
   J_WS=""; J_TAB=""; J_PANE=""; J_TERM=""; J_HOME=""
+  J_BACKEND=""; J_HARNESS=""; J_MODEL=""; J_THINKING=""; J_SESSION=""
   [ -f "$IDENTITY_FILE" ] || return 1
   local k v
   while IFS='=' read -r k v; do
@@ -402,9 +422,16 @@ read_identity_journal() {  # sets J_* globals; returns 1 if absent/unreadable/ma
       pane_id) J_PANE=$v ;;
       terminal_id) J_TERM=$v ;;
       home) J_HOME=$v ;;
+      backend) J_BACKEND=$v ;;
+      harness) J_HARNESS=$v ;;
+      model) J_MODEL=$v ;;
+      thinking) J_THINKING=$v ;;
+      session) J_SESSION=$v ;;
     esac
   done < "$IDENTITY_FILE"
-  [ -n "$J_WS" ] && [ -n "$J_TAB" ] && [ -n "$J_PANE" ] && [ -n "$J_TERM" ] && [ -n "$J_HOME" ]
+  [ -n "$J_WS" ] && [ -n "$J_TAB" ] && [ -n "$J_PANE" ] && [ -n "$J_TERM" ] && [ -n "$J_HOME" ] \
+    && [ -n "$J_BACKEND" ] && [ -n "$J_HARNESS" ] && [ -n "$J_MODEL" ] \
+    && [ -n "$J_THINKING" ] && [ -n "$J_SESSION" ] || return 2
 }
 
 write_identity_journal() {  # <workspace> <tab> <pane> <terminal_id>
@@ -457,6 +484,21 @@ pane_holds_pid() {  # <pane_id> <pid>
   [ "$found" = true ]
 }
 
+unjournaled_label_collision() {
+  local workspaces workspace_ids workspace_count workspace_id tabs tab_count
+  workspaces=$(hcli workspace list 2>/dev/null) || return 2
+  workspace_ids=$(printf '%s' "$workspaces" | jq -ce --arg label "$FM_LAUNCHER_WORKSPACE_LABEL" \
+    'select((.result.workspaces | type) == "array") | [.result.workspaces[] | select(.label == $label) | .workspace_id]' 2>/dev/null) || return 2
+  workspace_count=$(printf '%s' "$workspace_ids" | jq -er 'length' 2>/dev/null) || return 2
+  [ "$workspace_count" -le 1 ] || return 1
+  [ "$workspace_count" -eq 1 ] || return 0
+  workspace_id=$(printf '%s' "$workspace_ids" | jq -er '.[0]' 2>/dev/null) || return 2
+  tabs=$(hcli tab list --workspace "$workspace_id" 2>/dev/null) || return 2
+  tab_count=$(printf '%s' "$tabs" | jq -er --arg label "$FM_LAUNCHER_TAB_LABEL" \
+    'select((.result.tabs | type) == "array") | [.result.tabs[] | select(.label == $label)] | length' 2>/dev/null) || return 2
+  [ "$tab_count" -eq 0 ] || return 1
+}
+
 classify() {
   if ! session_exists; then
     STATE=absent
@@ -464,10 +506,17 @@ classify() {
     return
   fi
 
-  local lock_pid=""
+  local lock_pid="" journal_status collision_status
   lock_pid=$(read_session_lock_pid)
 
-  if ! read_identity_journal; then
+  read_identity_journal
+  journal_status=$?
+  if [ "$journal_status" -ne 0 ]; then
+    if [ "$journal_status" -eq 2 ] || { [ -e "$IDENTITY_FILE" ] && [ ! -f "$IDENTITY_FILE" ]; }; then
+      STATE=ambiguous
+      log ERROR "launcher identity journal exists but is unreadable or malformed - refusing to create another primary"
+      return
+    fi
     # No identity journal (never adopted/created by this launcher). Never
     # scan the session for "any pi at this cwd" and never silently adopt -
     # that heuristic is exactly what produces false-positive duplicates
@@ -478,6 +527,17 @@ classify() {
     if [ -n "$lock_pid" ] && session_lock_pid_alive "$lock_pid"; then
       STATE=ambiguous
       log ERROR "no launcher identity journal, but Firstmate's session lock (pid $lock_pid) is live - a primary may already be running unrecorded; refusing to guess (use --adopt-current from inside it)"
+      return
+    fi
+    unjournaled_label_collision
+    collision_status=$?
+    if [ "$collision_status" -ne 0 ]; then
+      STATE=ambiguous
+      if [ "$collision_status" -eq 1 ]; then
+        log ERROR "no launcher identity journal, but the configured workspace/tab label already exists or is non-unique - refusing to identify or duplicate it"
+      else
+        log ERROR "no launcher identity journal, and the configured workspace/tab labels could not be inspected reliably - refusing to create another primary"
+      fi
       return
     fi
     STATE=absent
@@ -491,6 +551,14 @@ classify() {
     # anyway rather than trusting it blindly).
     STATE=ambiguous
     log ERROR "identity journal home '$J_HOME' does not match resolved FM_HOME '$FM_HOME'"
+    return
+  fi
+
+  if [ "$J_BACKEND" != "$FM_LAUNCHER_BACKEND" ] || [ "$J_HARNESS" != "$FM_LAUNCHER_HARNESS" ] \
+     || [ "$J_MODEL" != "$FM_LAUNCHER_MODEL" ] || [ "$J_THINKING" != "$FM_LAUNCHER_THINKING" ] \
+     || [ "$J_SESSION" != "$SESSION" ]; then
+    STATE=ambiguous
+    log ERROR "identity journal runtime pin does not match the configured backend, harness, model, thinking, or session - refusing to attach or recover it"
     return
   fi
 
@@ -624,6 +692,9 @@ check_model_pin
 # full quota gate below, since those paths can start or resume a model.
 # ---------------------------------------------------------------------------
 if [ "$MODE" = adopt-current ]; then
+  acquire_lock
+  [ ! -e "$IDENTITY_FILE" ] \
+    || die "adopt-current is first-install-only and an identity journal already exists at $IDENTITY_FILE - refusing to overwrite it"
   for v in HERDR_WORKSPACE_ID HERDR_TAB_ID HERDR_PANE_ID; do
     [ -n "${!v:-}" ] || die "adopt-current must be run FROM INSIDE the live Herdr Pi primary pane you want to adopt - $v is not set in this environment (it is not a Herdr-managed pane)"
   done
@@ -752,6 +823,11 @@ case "$STATE" in
         [ -n "$WS_ID" ] || die "workspace create returned no workspace id"
         log INFO "created workspace $WS_ID"
       fi
+    fi
+    unjournaled_label_collision
+    collision_status=$?
+    if [ "$collision_status" -ne 0 ]; then
+      die "the configured workspace/tab label is already present, duplicated, or unreadable without an exact usable journal - refusing to create another primary"
     fi
     out=$(hcli tab create --workspace "$WS_ID" --cwd "$FM_HOME" --label "$FM_LAUNCHER_TAB_LABEL" --no-focus \
       --env "FM_HOME=$FM_HOME" --env "FM_BACKEND=$FM_LAUNCHER_BACKEND" --env "FM_PI_HARNESS=$FM_LAUNCHER_HARNESS" 2>&1) \

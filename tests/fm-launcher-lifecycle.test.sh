@@ -82,6 +82,15 @@ JSON
 EOF
 chmod +x "$QUOTA_LOW"
 
+QUOTA_MISSING_PERCENT="$LAB_SCRATCH/quota-missing-percent"
+cat > "$QUOTA_MISSING_PERCENT" <<'EOF'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"providers":[{"source":"oauth","state":{"status":"fresh"},"quotaSemantics":{"status":"known"},"windows":[{"id":"weekly","kind":"weekly"}]}]}
+JSON
+EOF
+chmod +x "$QUOTA_MISSING_PERCENT"
+
 QUOTA_FAIL="$LAB_SCRATCH/quota-fail"
 cat > "$QUOTA_FAIL" <<'EOF'
 #!/usr/bin/env bash
@@ -108,6 +117,7 @@ new_home() {
   local label=$1 wslabel=$2 home
   home="$LAB_SCRATCH/home-$label"
   mkdir -p "$home/bin" "$home/state"
+  cp "$ROOT/bin/herdr-min-protocol" "$home/bin/herdr-min-protocol"
   : > "$home/AGENTS.md"
   home=$(cd "$home" && pwd -P)
   cat > "$home/fm-launcher.conf" <<EOF
@@ -210,6 +220,16 @@ FINAL_COUNT=$(agent_count_at_cwd "$HOME1_CWD")
 [ "$FINAL_COUNT" -eq "$AFTER_COUNT" ] || fail "the check must not have created or removed any agent (before=$AFTER_COUNT after=$FINAL_COUNT)"
 pass "launcher: exact journaled identity is immune to an unrelated live agent at the same cwd"
 
+cp "$JOURNAL1" "$JOURNAL1.saved"
+awk -F= '$1=="model" { print "model=openai-codex/different-model"; next } { print }' \
+  "$JOURNAL1.saved" > "$JOURNAL1"
+CHECK2_PIN=$(run_launcher "$HOME1" "$QUOTA_OK" --check 2>&1)
+RC2_PIN=$?
+[ "$RC2_PIN" -ne 0 ] || fail "a journal written for a different model pin must refuse attachment"
+assert_contains "$CHECK2_PIN" "ambiguous" "model-pin drift must classify as ambiguous"
+mv "$JOURNAL1.saved" "$JOURNAL1"
+pass "launcher: journal identity binds the configured model and reasoning pin"
+
 # =============================================================================
 # Scenario 3: a proven live primary is only focused/attached, never restarted,
 # so attaching it must succeed even when the quota probe is broken/failing.
@@ -237,6 +257,13 @@ RC4=$?
 assert_contains "$CHECK4" "reserve" "refusal must name the reserve-floor requirement"
 [ ! -f "$HOME4/state/.fm-launcher-primary-identity" ] || fail "a quota-refused absent check must never create a primary"
 pass "launcher: absent-state start refuses below the configured quota reserve, creates nothing"
+
+HOME4A=$(new_home s4-missing-percent launcher-s4-missing-percent)
+CHECK4A=$(run_launcher "$HOME4A" "$QUOTA_MISSING_PERCENT" --check 2>&1)
+RC4A=$?
+[ "$RC4A" -ne 0 ] || fail "quota windows without percentRemaining must fail closed"
+assert_contains "$CHECK4A" "percentRemaining" "missing quota percentages must produce an explicit refusal"
+pass "launcher: missing quota percentages fail closed"
 
 # Dead-primary recovery: create a real primary, kill only its foreground "pi"
 # process (leaving a plain idle shell in the same pane - a provable husk),
@@ -295,6 +322,13 @@ J5="$HOME5/state/.fm-launcher-primary-identity"
 assert_grep "pane_id=$PANE5" "$J5" "adopted journal must record the exact live pane id"
 pass "launcher: --adopt-current records an already-live identity without ever touching quota"
 
+ADOPT_AGAIN=$(HERDR_WORKSPACE_ID="$WS5" HERDR_TAB_ID="$TAB5" HERDR_PANE_ID="$PANE5" \
+  run_launcher "$HOME5" "$QUOTA_POISON" --adopt-current 2>&1)
+RC_ADOPT_AGAIN=$?
+[ "$RC_ADOPT_AGAIN" -ne 0 ] || fail "adopt-current must never overwrite an existing identity journal"
+assert_contains "$ADOPT_AGAIN" "first-install-only" "repeat adoption refusal must explain the existing identity boundary"
+pass "launcher: --adopt-current serializes and refuses to overwrite an existing journal"
+
 # Negative: adopt-current from outside the live pane (mismatched pane id) must refuse.
 HOME5B=$(new_home s5b launcher-s5b)
 HERDR_WORKSPACE_ID="$WS5" HERDR_TAB_ID="$TAB5" HERDR_PANE_ID="w9:pfake" \
@@ -302,6 +336,19 @@ HERDR_WORKSPACE_ID="$WS5" HERDR_TAB_ID="$TAB5" HERDR_PANE_ID="w9:pfake" \
 RC_ADOPT_BAD=$?
 [ "$RC_ADOPT_BAD" -ne 0 ] || fail "adopt-current must refuse when HERDR_PANE_ID does not match Herdr's own self-report"
 pass "launcher: --adopt-current refuses a mismatched/unproven pane identity"
+
+HOME5C=$(new_home s5c launcher-s5c)
+WS5COUT=$(HERDR_SESSION="$SESSION" herdr workspace create --cwd "$HOME5C" --label launcher-s5c --no-focus --session "$SESSION")
+WS5C=$(printf '%s' "$WS5COUT" | jq -r '.result.workspace.workspace_id')
+TAB5COUT=$(HERDR_SESSION="$SESSION" herdr tab create --workspace "$WS5C" --cwd "$HOME5C" --label fm-primary --no-focus --session "$SESSION")
+PANE5C=$(printf '%s' "$TAB5COUT" | jq -r '.result.root_pane.pane_id')
+HERDR_SESSION="$SESSION" herdr pane run "$PANE5C" "'$FAKE_PI' --model foo --thinking low" --session "$SESSION" >/dev/null
+sleep 1
+CHECK5C=$(run_launcher "$HOME5C" "$QUOTA_OK" --check 2>&1)
+RC5C=$?
+[ "$RC5C" -ne 0 ] || fail "an unjournaled configured primary tab must refuse rather than be duplicated"
+assert_contains "$CHECK5C" "ambiguous" "unjournaled configured tab collision must classify as ambiguous"
+pass "launcher: an unjournaled configured primary tab refuses as ambiguous"
 
 # =============================================================================
 # Scenario 6: concurrent launches serialize through the single-flight lock.

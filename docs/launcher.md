@@ -24,9 +24,10 @@ It is a convenience wrapper around already-supported Herdr and Pi entry points, 
 
 ## Safety boundaries
 
-- **Identity is exclusively an exact recorded journal** (workspace/tab/pane/terminal id), never a scan for "any Pi agent at this cwd" - an ordinary crewmate or secondmate Pi pane can legitimately share the same working directory as the primary, and the launcher never treats that as a duplicate or foreign endpoint.
+- **Identity is exclusively an exact recorded journal** (workspace/tab/pane/terminal id plus backend, harness, model, reasoning, and session pins), never a scan for "any Pi agent at this cwd" - an ordinary crewmate or secondmate Pi pane can legitimately share the same working directory as the primary, and the launcher never treats that as a duplicate or foreign endpoint.
 - **A live primary is only focused and attached**, never restarted; a proven idle husk (a childless shell, verified through Herdr's own process-info, at the exact recorded pane) is recovered in place, never by closing or replacing the pane; anything less certain is reported, never destructively repaired.
 - **Quota is enforced only on actions that can start or recover a model process** - a new primary or dead-primary recovery - never on attaching an already-live primary or on `--adopt-current`, which only records an identity that already exists and never starts, resumes, or spends quota.
+- **Anthropic models are never accepted by this Pi launcher**, so they cannot be routed through Pi.
 - **The quota gate requires fresh first-party OAuth** for the configured provider (never API-key routing) and refuses below the configured reserve percent, never falling back to paid or extra usage.
 - **Any ambiguity - a duplicate label, an unreadable pane, a mismatched identity, a foreign live session-lock owner - is always a refusal**, never a guess; the launcher prints the exact Herdr session to inspect by hand.
 - **Concurrent launches serialize** through a single-flight, home-scoped lock distinct from Firstmate's own session lock (which the launcher only ever reads, never writes or clears).

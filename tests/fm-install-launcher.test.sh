@@ -12,9 +12,11 @@ set -u
 
 INSTALLER="$ROOT/bin/fm-install-launcher.sh"
 TEMPLATE="$ROOT/bin/templates/fm-launcher.command"
+PROTOCOL_FLOOR="$ROOT/bin/herdr-min-protocol"
 
 assert_present "$INSTALLER" "bin/fm-install-launcher.sh is missing"
 assert_present "$TEMPLATE" "bin/templates/fm-launcher.command is missing"
+assert_present "$PROTOCOL_FLOOR" "bin/herdr-min-protocol is missing"
 [ -x "$INSTALLER" ] || fail "fm-install-launcher.sh must be executable"
 
 # fake_checkout <root-dir>: build a minimal fake Firstmate checkout at
@@ -26,6 +28,7 @@ fake_checkout() {
   : > "$root/AGENTS.md"
   cp "$TEMPLATE" "$root/bin/templates/fm-launcher.command"
   cp "$INSTALLER" "$root/bin/fm-install-launcher.sh"
+  cp "$PROTOCOL_FLOOR" "$root/bin/herdr-min-protocol"
   chmod +x "$root/bin/fm-install-launcher.sh"
 }
 
@@ -69,6 +72,13 @@ OUT=$("$TMP3/checkout/bin/fm-install-launcher.sh" "$TMP3/dest" 2>&1) && fail "in
 assert_contains "$OUT" "provider" "refusal must explain the required model shape"
 pass "fm-install-launcher: refuses a malformed model value"
 
+TMP3A=$(fm_test_tmproot fm-install-launcher)
+fake_checkout "$TMP3A/checkout"
+printf 'model=anthropic/claude-sonnet-4\nthinking=low\npi_bin=PATH\nquota_provider=claude\n' > "$TMP3A/checkout/config/launcher.conf"
+OUT=$("$TMP3A/checkout/bin/fm-install-launcher.sh" "$TMP3A/dest" 2>&1) && fail "installer must refuse to route an Anthropic model through Pi"
+assert_contains "$OUT" "anthropic" "refusal must name the forbidden Anthropic provider"
+pass "fm-install-launcher: refuses Anthropic models routed through Pi"
+
 TMP3b=$(fm_test_tmproot fm-install-launcher)
 fake_checkout "$TMP3b/checkout"
 printf 'model=openai-codex/gpt-5.6-sol\nthinking=extreme\npi_bin=PATH\nquota_provider=codex\n' > "$TMP3b/checkout/config/launcher.conf"
@@ -86,6 +96,14 @@ fake_checkout "$TMP3d/checkout"
 printf 'model=openai-codex/gpt-5.6-sol\nthinking=low\npi_bin=PATH\nquota_provider=codex\nquota_reserve_percent=not-a-number\n' > "$TMP3d/checkout/config/launcher.conf"
 OUT=$("$TMP3d/checkout/bin/fm-install-launcher.sh" "$TMP3d/dest" 2>&1) && fail "installer must refuse a non-integer quota_reserve_percent"
 pass "fm-install-launcher: refuses a non-integer quota_reserve_percent"
+
+for invalid_reserve in 08 101; do
+  TMP3R=$(fm_test_tmproot fm-install-launcher)
+  fake_checkout "$TMP3R/checkout"
+  printf 'model=openai-codex/gpt-5.6-sol\nthinking=low\npi_bin=PATH\nquota_provider=codex\nquota_reserve_percent=%s\n' "$invalid_reserve" > "$TMP3R/checkout/config/launcher.conf"
+  OUT=$("$TMP3R/checkout/bin/fm-install-launcher.sh" "$TMP3R/dest" 2>&1) && fail "installer must refuse invalid reserve $invalid_reserve"
+done
+pass "fm-install-launcher: reserve must be canonical and within 0 through 100"
 
 TMP3e=$(fm_test_tmproot fm-install-launcher)
 fake_checkout "$TMP3e/checkout"
