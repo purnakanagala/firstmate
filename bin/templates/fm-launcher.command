@@ -719,8 +719,11 @@ if [ "$MODE" = adopt-current ]; then
     --arg n "$FM_LAUNCHER_HARNESS" \
     --arg model "$FM_LAUNCHER_MODEL" \
     --arg thinking "$FM_LAUNCHER_THINKING" '
+    def effective_options($argv):
+      ($argv | index("--")) as $boundary
+      | if $boundary == null then $argv else $argv[0:$boundary] end;
     def flag_values($argv; $flag):
-      [$argv as $args
+      [effective_options($argv) as $args
        | range(0; ($args | length)) as $i
        | select($args[$i] == $flag and ($i + 1) < ($args | length))
        | $args[$i + 1]];

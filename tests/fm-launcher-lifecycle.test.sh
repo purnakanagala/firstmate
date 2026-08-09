@@ -353,6 +353,22 @@ assert_contains "$ADOPT_PIN" "unpinned pane" "runtime-pin refusal must identify 
 [ ! -e "$HOME5PIN/state/.fm-launcher-primary-identity" ] || fail "runtime-pin refusal must not write an identity journal"
 pass "launcher: --adopt-current proves the live Pi model and reasoning arguments"
 
+HOME5BOUNDARY=$(new_home s5boundary launcher-s5boundary)
+WS5BOUNDARYOUT=$(HERDR_SESSION="$SESSION" herdr workspace create --cwd "$HOME5BOUNDARY" --label launcher-s5boundary --no-focus --session "$SESSION")
+WS5BOUNDARY=$(printf '%s' "$WS5BOUNDARYOUT" | jq -r '.result.workspace.workspace_id')
+TAB5BOUNDARYOUT=$(HERDR_SESSION="$SESSION" herdr tab create --workspace "$WS5BOUNDARY" --cwd "$HOME5BOUNDARY" --label fm-primary --no-focus --session "$SESSION")
+TAB5BOUNDARY=$(printf '%s' "$TAB5BOUNDARYOUT" | jq -r '.result.tab.tab_id')
+PANE5BOUNDARY=$(printf '%s' "$TAB5BOUNDARYOUT" | jq -r '.result.root_pane.pane_id')
+HERDR_SESSION="$SESSION" herdr pane run "$PANE5BOUNDARY" "'$FAKE_PI' -- --model openai-codex/gpt-5.6-sol --thinking low" --session "$SESSION" >/dev/null
+sleep 1
+ADOPT_BOUNDARY=$(HERDR_WORKSPACE_ID="$WS5BOUNDARY" HERDR_TAB_ID="$TAB5BOUNDARY" HERDR_PANE_ID="$PANE5BOUNDARY" \
+  run_launcher "$HOME5BOUNDARY" "$QUOTA_POISON" --adopt-current 2>&1)
+RC_ADOPT_BOUNDARY=$?
+[ "$RC_ADOPT_BOUNDARY" -ne 0 ] || fail "adopt-current must ignore matching pin tokens after the option terminator"
+assert_contains "$ADOPT_BOUNDARY" "unpinned pane" "option-boundary refusal must identify the unproven pin"
+[ ! -e "$HOME5BOUNDARY/state/.fm-launcher-primary-identity" ] || fail "option-boundary refusal must not write an identity journal"
+pass "launcher: --adopt-current ignores model and reasoning tokens after the option terminator"
+
 HOME5C=$(new_home s5c launcher-s5c)
 WS5COUT=$(HERDR_SESSION="$SESSION" herdr workspace create --cwd "$HOME5C" --label launcher-s5c --no-focus --session "$SESSION")
 WS5C=$(printf '%s' "$WS5COUT" | jq -r '.result.workspace.workspace_id')
