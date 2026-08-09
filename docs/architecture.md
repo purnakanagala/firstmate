@@ -132,8 +132,7 @@ Ship briefs also tell the crewmate to verify `pwd -P` and `git rev-parse --show-
 ## Fresh-session objective rollover
 
 `bin/fm-rollover.sh` is the single owner of `fm-rollover-capsule.v1` and the in-place ordinary-task rollover transaction.
-The first supported path is an ordinary plain Pi ship on tmux because that combination can prove a live recorded owner, cleanly exit to the same shell endpoint, preserve the exact isolated worktree, and publish a new process-bound generation marker from a Pi extension.
-The pi-signed rollover path remains unsupported and unverified.
+The first supported paths are ordinary Pi and pi-signed ships on tmux because those combinations can prove a live recorded owner, cleanly exit to the same shell endpoint, preserve the exact isolated worktree, and publish a new process-bound generation marker from the shared Pi extension while retaining the selected harness identity.
 Every scout, secondmate, other harness, and other backend is rejected before the old worker exits.
 The capsule is capped at 8 KiB and contains only the current objective, accepted decisions, fixed immutable constraints, branch/revision and artifact pointers, validation/PR pointers, and explicit superseded-instruction markers.
 It never copies historical instructions, reports, chats, logs, private prompts, source, or secret-shaped input.
@@ -144,7 +143,7 @@ The transaction hashes the worktree status before and after, never runs reset/st
 Normal teardown validates and retires the capsule plus live, acknowledgment, and finalization proofs without removing unrelated task data.
 Spawn, rollover, and teardown serialize each task through the same home-local transaction lock.
 Spawn also holds a home-wide lifecycle lock, and secondmate teardown holds that same lock before enumerating children through removal, including nested secondmate homes during forced cleanup.
-Expected benefit is lower first-turn and peak context plus zero superseded-instruction actions; the trade-off is explicit capsule preparation and Pi/tmux-only initial support.
+Expected benefit is lower first-turn and peak context plus zero superseded-instruction actions; the trade-off is explicit capsule preparation and Pi-family/tmux-only initial support.
 Measure first-turn/peak context from existing Pi records, obsolete actions from task evidence, and unchanged-wait turns avoided from the bounded suppression counters.
 Roll back the rollover path if two migrations omit necessary context, and roll back quiet-wait suppression if any changed or actionable event is missed or delayed.
 

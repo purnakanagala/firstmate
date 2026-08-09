@@ -1,6 +1,6 @@
 ---
 name: harness-adapters
-description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, and kimi.
+description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, rolling over an ordinary ship session, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, and kimi.
 user-invocable: false
 metadata:
   internal: true
@@ -52,8 +52,8 @@ Use that value for interrupt, exit, resume, rollover, and skill-invocation facts
 ## Fresh-session ordinary-task rollover
 
 Load this skill before invoking `bin/fm-rollover.sh`.
-The script currently supports only an ordinary `kind=ship` worker recorded as `pi` on the tmux backend.
-The `pi-signed` rollover path is unsupported and unverified, even though pi-signed remains a verified adapter for its existing non-rollover operations.
+The script currently supports only an ordinary `kind=ship` worker recorded as `pi` or `pi-signed` on the tmux backend.
+Both identities use the same guarded Pi surface while preserving the exact recorded executable and launch-bound `FM_PI_HARNESS` identity.
 It exits the current Pi session cleanly, retains the exact endpoint and isolated worktree, launches a new guarded Pi process without an objective turn, finalizes the generation only after preservation and ownership checks, then submits the capsule prompt through the verified composer path and requires the fresh worker to call `fm_rollover_ack` before any other tool.
 The existing task Pi turn-end extension remains loaded, and no-mistakes ownership and response mechanics do not change.
 A byte-bounded capsule stores pointers rather than brief, report, chat, log, prompt, or source content.

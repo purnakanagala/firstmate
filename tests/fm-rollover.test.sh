@@ -119,7 +119,9 @@ printf '%s\t%s\t4242\t%s\n' "$FM_ROLLOVER_GENERATION" "$FM_ROLLOVER_CAPSULE_SHA"
 printf '%s\n' "$FM_PI_HARNESS" >> "$root/harness-execs"
 SH
 cp "$FAKEBIN/pi-double" "$FAKEBIN/pi"
+cp "$FAKEBIN/pi-double" "$FAKEBIN/pi-signed"
 chmod +x "$FAKEBIN/pi"
+chmod +x "$FAKEBIN/pi-signed"
 
 run_rollover() {
   PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" \
@@ -144,6 +146,7 @@ pass "launch dependencies are preflighted before capsule publication or worker e
 
 BEFORE=$(git -C "$WT" status --porcelain=v1)
 OUT=$(run_rollover)
+FIRST_OUT=$OUT
 printf '%s' "$OUT" | grep -F 'fresh-session=proved worktree=preserved' >/dev/null \
   || fail "first rollover did not prove fresh ownership: $OUT"
 AFTER=$(git -C "$WT" status --porcelain=v1)
@@ -178,6 +181,65 @@ printf '%s' "$OUT" | grep -F 'rollover unchanged' >/dev/null || fail "identical 
 [ "$(jq -r '.generation' "$CAPSULE")" = 1 ] || fail "idempotent retry advanced generation"
 pass "fresh Pi launch, process-bound identity, bounded capsule, preservation, and idempotency"
 
+HOME_SIGNED="$TMP/home-signed"
+WT_SIGNED="$TMP/task-worktree-signed"
+mkdir -p "$HOME_SIGNED/state" "$HOME_SIGNED/data/task" "$WT_SIGNED"
+WT_SIGNED=$(cd "$WT_SIGNED" && pwd -P)
+git -C "$WT_SIGNED" init -q
+git -C "$WT_SIGNED" config user.email test@example.test
+git -C "$WT_SIGNED" config user.name Test
+printf 'signed base\n' > "$WT_SIGNED/tracked.txt"
+git -C "$WT_SIGNED" add tracked.txt
+git -C "$WT_SIGNED" commit -qm base
+printf 'signed unlanded\n' >> "$WT_SIGNED/tracked.txt"
+printf '// turn end\n' > "$HOME_SIGNED/state/task.pi-ext.ts"
+cat > "$HOME_SIGNED/state/task.meta" <<EOF
+window=test:fm-task
+worktree=$WT_SIGNED
+project=$PROJECT
+harness=pi-signed
+kind=ship
+mode=no-mistakes
+yolo=off
+model=sol
+effort=medium
+EOF
+printf 'pi-signed\n' > "$TMP/agent"
+SIGNED_BEFORE=$(git -C "$WT_SIGNED" status --porcelain=v1)
+SIGNED_OUT=$(PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT_SIGNED" \
+  FM_HOME="$HOME_SIGNED" FM_ROOT_OVERRIDE="$ROOT" "$ROOT/bin/fm-rollover.sh" task \
+  --objective 'Implement the signed bounded objective only.' \
+  --decision 'Keep no-mistakes authority unchanged.' --supersedes prior --non-secret-reviewed)
+printf '%s' "$SIGNED_OUT" | grep -F 'fresh-session=proved worktree=preserved' >/dev/null \
+  || fail "pi-signed rollover did not prove fresh ownership: $SIGNED_OUT"
+[ "$SIGNED_BEFORE" = "$(git -C "$WT_SIGNED" status --porcelain=v1)" ] || fail "pi-signed rollover changed unlanded work"
+[ "$(jq -r '.generation' "$HOME_SIGNED/data/task/rollover-capsule.json")" = 1 ] || fail "pi-signed generation is not 1"
+[ "$(tail -1 "$TMP/harness-execs")" = pi-signed ] || fail "provider-free pi-signed executable double was not invoked"
+grep -F "FM_PI_HARNESS='pi-signed'" "$TMP/launch-command" >/dev/null \
+  || fail "pi-signed launch did not preserve its selected identity"
+pass "pi-signed fresh launch preserves selected identity, worktree bytes, and guarded generation"
+if [ -n "${FM_TEST_EVIDENCE_DIR:-}" ]; then
+  mkdir -p "$FM_TEST_EVIDENCE_DIR"
+  cp "$CAPSULE" "$FM_TEST_EVIDENCE_DIR/pi-rollover-capsule.json"
+  cp "$HOME_SIGNED/data/task/rollover-capsule.json" "$FM_TEST_EVIDENCE_DIR/pi-signed-rollover-capsule.json"
+  {
+    printf '%s\n' '$ bin/fm-rollover.sh task --objective "Implement the current bounded objective only." ...'
+    printf '%s\n\n' "$FIRST_OUT"
+    printf '%s\n' '$ identical retry'
+    printf '%s\n\n' "$OUT"
+    printf '%s\n' '$ bin/fm-rollover.sh task --objective "Implement the signed bounded objective only." ...'
+    printf '%s\n\n' "$SIGNED_OUT"
+    printf '%s\n' '$ jq evidence summary pi-signed-rollover-capsule.json'
+    jq '{schema,task,generation,current_objective,objective_sha256,accepted_decisions,immutable_constraints,artifacts,validation,superseded_instructions}' \
+      "$HOME_SIGNED/data/task/rollover-capsule.json"
+    printf '\n%s\n' '$ recorded launch identity'
+    grep -o "FM_PI_HARNESS='pi-signed'" "$TMP/launch-command"
+    printf '\n%s\n' '$ fresh worker objective delivery gate'
+    grep -o 'fm_rollover_ack with generation [0-9][^ ]*' "$TMP/objective-prompt" || true
+  } > "$FM_TEST_EVIDENCE_DIR/rollover-operator-transcript.txt"
+fi
+printf 'pi\n' > "$TMP/agent"
+
 cp "$CAPSULE" "$TMP/tampered.json"
 jq '.objective_sha256 = ("0" * 64)' "$TMP/tampered.json" > "$TMP/tampered.next" && mv "$TMP/tampered.next" "$TMP/tampered.json"
 if "$ROOT/bin/fm-rollover.sh" --validate "$TMP/tampered.json" >/dev/null 2>&1; then
@@ -202,7 +264,7 @@ if PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" FM_HOME="$HOM
   fail "stale capsule generation advanced instead of refusing"
 fi
 cp "$TMP/generation.save" "$CAPSULE"
-[ "$(grep -c '^launch$' "$TMP/launches")" = 1 ] || fail "stale generation mismatch launched a worker"
+[ "$(grep -c '^launch$' "$TMP/launches")" = 2 ] || fail "stale generation mismatch launched a worker"
 pass "stale capsule, metadata, and live generations stop before rollover"
 
 for secret in 'password: hunter2' 'Authorization: Bearer abcdefghijkl' 'https://user:pass@example.test/path' 'sk-abcdefghijklmnop' 'ghp_abcdefghijklmnop' 'xoxb-abcdefghijklmnop' 'glpat-abcdefghijklmnop' 'AKIAIOSFODNN7EXAMPLE' 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJl' 'abcdefghijklmnopqrstuvwx'; do
@@ -236,13 +298,13 @@ refusal_case() {
 }
 refusal_case scout 'kind=scout'
 refusal_case secondmate 'kind=secondmate'
-for unsupported_harness in pi-signed claude codex opencode grok kimi; do
+for unsupported_harness in claude codex opencode grok kimi; do
   refusal_case "$unsupported_harness" "harness=$unsupported_harness"
 done
 for unsupported_backend in herdr zellij orca cmux; do
   refusal_case "$unsupported_backend" "backend=$unsupported_backend"
 done
-[ "$(grep -c '^launch$' "$TMP/launches")" = 1 ] || fail "unsupported refusal launched a session"
+[ "$(grep -c '^launch$' "$TMP/launches")" = 2 ] || fail "unsupported refusal launched a session"
 pass "scout, secondmate, unsupported harness, and unsupported backend boundaries"
 
 if PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" FM_HOME="$HOME2" FM_ROOT_OVERRIDE="$ROOT" \
