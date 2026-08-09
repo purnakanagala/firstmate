@@ -120,27 +120,40 @@ fm_refuse_if_gate_agent
 FM_LOCK_LOG_PREFIX=teardown
 "$FM_ROOT/bin/fm-guard.sh" || true
 
-TEARDOWN_TASK_LOCKS=()
-teardown_task_locks_release() {
+TEARDOWN_LIFECYCLE_LOCKS=()
+teardown_locks_release() {
   local status=$? index
-  for ((index=${#TEARDOWN_TASK_LOCKS[@]} - 1; index >= 0; index--)); do
-    fm_lock_release "${TEARDOWN_TASK_LOCKS[$index]}" || true
+  for ((index=${#TEARDOWN_LIFECYCLE_LOCKS[@]} - 1; index >= 0; index--)); do
+    fm_lock_release "${TEARDOWN_LIFECYCLE_LOCKS[$index]}" || true
   done
   return "$status"
 }
-trap teardown_task_locks_release EXIT
+trap teardown_locks_release EXIT
 
-teardown_task_lock_acquire() {
-  local state_dir=$1 id=$2 lock held
-  lock="$state_dir/.spawn-$id.lock"
-  for held in "${TEARDOWN_TASK_LOCKS[@]+"${TEARDOWN_TASK_LOCKS[@]}"}"; do
+teardown_lock_acquire() {
+  local lock=$1 refusal=$2 held
+  for held in "${TEARDOWN_LIFECYCLE_LOCKS[@]+"${TEARDOWN_LIFECYCLE_LOCKS[@]}"}"; do
     [ "$held" = "$lock" ] && return 0
   done
   if ! fm_lock_try_acquire "$lock"; then
-    echo "REFUSED: task $id is owned by another spawn, rollover, or teardown; preserving task state." >&2
+    echo "$refusal" >&2
     return 1
   fi
-  TEARDOWN_TASK_LOCKS+=("$lock")
+  TEARDOWN_LIFECYCLE_LOCKS+=("$lock")
+}
+
+teardown_task_lock_acquire() {
+  local state_dir=$1 id=$2 lock
+  lock="$state_dir/.spawn-$id.lock"
+  teardown_lock_acquire "$lock" \
+    "REFUSED: task $id is owned by another spawn, rollover, or teardown; preserving task state."
+}
+
+teardown_home_lifecycle_lock_acquire() {
+  local state_dir=$1 lock
+  lock="$state_dir/.spawn-home.lock"
+  teardown_lock_acquire "$lock" \
+    "REFUSED: firstmate home lifecycle is owned by another spawn or teardown; preserving home state."
 }
 
 teardown_task_lock_acquire "$STATE" "$ID" || exit 1
@@ -1007,6 +1020,7 @@ validate_firstmate_home_children_removal() {
   local home=$1 sub_state child_meta child_id child_wt child_proj child_kind child_home child_backend child_orca_worktree_id
   sub_state="$home/state"
   [ -d "$sub_state" ] || return 0
+  teardown_home_lifecycle_lock_acquire "$sub_state" || return 1
   for child_meta in "$sub_state"/*.meta; do
     [ -e "$child_meta" ] || continue
     child_id=$(basename "$child_meta" .meta)
@@ -1040,6 +1054,7 @@ cleanup_firstmate_home_children() {
   local home=$1 sub_state child_meta child_id child_t child_wt child_proj child_kind child_home child_backend child_orca_worktree_id child_return_rc
   sub_state="$home/state"
   [ -d "$sub_state" ] || return 0
+  teardown_home_lifecycle_lock_acquire "$sub_state" || return 1
   for child_meta in "$sub_state"/*.meta; do
     [ -e "$child_meta" ] || continue
     child_id=$(basename "$child_meta" .meta)
@@ -1124,6 +1139,8 @@ validate_rollover_cleanup "$STATE" "$DATA" "$ID" || exit 1
 
 if [ "$KIND" = secondmate ]; then
   [ -n "$HOME_PATH" ] || HOME_PATH=$WT
+  validate_firstmate_home_for_removal "$HOME_PATH" "secondmate home" "$ID" >/dev/null || exit 1
+  teardown_home_lifecycle_lock_acquire "$HOME_PATH/state" || exit 1
   validate_firstmate_home_for_removal "$HOME_PATH" "secondmate home" "$ID" >/dev/null || exit 1
   if [ "$FORCE" = "--force" ]; then
     validate_firstmate_home_children_removal "$HOME_PATH" || exit 1

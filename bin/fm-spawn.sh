@@ -235,6 +235,8 @@ HERDR_PRESENTATION_ORDER_LOCK=
 HERDR_PRESENTATION_ORDER_LOCK_HELD=0
 SPAWN_TASK_LOCK=
 SPAWN_TASK_LOCK_HELD=0
+SPAWN_HOME_LIFECYCLE_LOCK=
+SPAWN_HOME_LIFECYCLE_LOCK_HELD=0
 CONFIG_INHERIT_LOCK=
 CONFIG_INHERIT_LOCK_HELD=0
 
@@ -306,6 +308,10 @@ spawn_abort_cleanup() {
   if [ "$SPAWN_TASK_LOCK_HELD" = 1 ]; then
     SPAWN_TASK_LOCK_HELD=0
     fm_lock_release "$SPAWN_TASK_LOCK" || true
+  fi
+  if [ "$SPAWN_HOME_LIFECYCLE_LOCK_HELD" = 1 ]; then
+    SPAWN_HOME_LIFECYCLE_LOCK_HELD=0
+    fm_lock_release "$SPAWN_HOME_LIFECYCLE_LOCK" || true
   fi
   if [ "$CONFIG_INHERIT_LOCK_HELD" = 1 ]; then
     CONFIG_INHERIT_LOCK_HELD=0
@@ -379,6 +385,12 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
 fi
 ID=${POS[0]}
 fm_task_id_creation_valid "$ID" || { echo "error: invalid task id" >&2; exit 2; }
+SPAWN_HOME_LIFECYCLE_LOCK="$STATE/.spawn-home.lock"
+if ! fm_lock_try_acquire "$SPAWN_HOME_LIFECYCLE_LOCK"; then
+  echo "error: firstmate home lifecycle is owned by another spawn or teardown" >&2
+  exit 1
+fi
+SPAWN_HOME_LIFECYCLE_LOCK_HELD=1
 SPAWN_TASK_LOCK="$STATE/.spawn-$ID.lock"
 if ! fm_lock_try_acquire "$SPAWN_TASK_LOCK"; then
   echo "error: another spawn is already creating task $ID" >&2

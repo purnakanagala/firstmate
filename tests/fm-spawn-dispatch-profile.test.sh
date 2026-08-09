@@ -93,6 +93,15 @@ run_spawn() {
     "$SPAWN" "$@" 2>&1
 }
 
+hold_home_lifecycle_lock() {
+  local state_dir=$1 lock owner
+  lock="$state_dir/.spawn-home.lock"
+  owner="$lock.owner.test"
+  mkdir "$owner"
+  printf '%s\n' "$$" > "$owner/pid"
+  ln -s "$owner" "$lock"
+}
+
 read_case_record() {
   IFS='|' read -r CASE_DIR HOME_DIR PROJ_DIR WT_DIR FAKEBIN_DIR LAUNCH_LOG <<EOF
 $1
@@ -122,6 +131,23 @@ test_no_profile_keeps_claude_profile_defaults() {
   expected="CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions \"\$('${ROOT}/bin/fm-operational-input.sh' encode launch-brief < '$HOME_DIR/data/$id/brief.md')\""
   [ "$launch" = "$expected" ] || fail "no-profile claude launch did not use the canonical launch kind"$'\n'"expected: $expected"$'\n'"actual:   $launch"
   pass "no --model/--effort records defaults and types the claude launch instructions"
+}
+
+test_spawn_refuses_home_owned_by_teardown() {
+  local rec id out status
+  id=profile-home-lock-z17
+  rec=$(make_spawn_case profile-home-lock claude "$id")
+  read_case_record "$rec"
+  hold_home_lifecycle_lock "$HOME_DIR/state"
+
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR")
+  status=$?
+  expect_code 1 "$status" "spawn should refuse a home owned by teardown"
+  assert_contains "$out" "firstmate home lifecycle is owned by another spawn or teardown" \
+    "spawn did not explain the home lifecycle refusal"
+  assert_absent "$HOME_DIR/state/$id.meta" "home lifecycle refusal wrote task metadata"
+  [ ! -s "$LAUNCH_LOG" ] || fail "home lifecycle refusal typed a launch command"
+  pass "spawn refuses while teardown owns the firstmate home"
 }
 
 test_active_dispatch_profile_requires_explicit_harness_for_ship() {
@@ -456,6 +482,7 @@ test_active_dispatch_profile_does_not_block_secondmate_launch() {
 }
 
 test_no_profile_keeps_claude_profile_defaults
+test_spawn_refuses_home_owned_by_teardown
 test_active_dispatch_profile_requires_explicit_harness_for_ship
 test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness

@@ -507,6 +507,15 @@ hold_task_lock() {
   ln -s "$owner" "$lock"
 }
 
+hold_home_lifecycle_lock() {
+  local state_dir=$1 lock owner
+  lock="$state_dir/.spawn-home.lock"
+  owner="$lock.owner.test"
+  mkdir "$owner"
+  printf '%s\n' "$$" > "$owner/pid"
+  ln -s "$owner" "$lock"
+}
+
 test_local_only_fork_remote_allows() {
   local case_dir rc
   case_dir=$(make_case fork-allow)
@@ -610,6 +619,29 @@ test_forced_secondmate_teardown_refuses_live_child_rollover_lock() {
   grep -F 'task child is owned by another spawn, rollover, or teardown' "$case_dir/stderr" >/dev/null \
     || fail "live child rollover lock refusal was not explained"
   pass "forced secondmate teardown holds child transaction boundaries"
+}
+
+test_forced_secondmate_teardown_refuses_live_home_spawn_lock() {
+  local case_dir subhome rc
+  case_dir=$(make_case home-spawn-lock)
+  subhome="$case_dir/secondmate-home"
+  mkdir -p "$subhome/state" "$subhome/data" "$subhome/config" "$subhome/projects"
+  printf '%s\n' task-x1 > "$subhome/.fm-secondmate-home"
+  write_meta "$case_dir" local-only secondmate
+  printf 'home=%s\n' "$subhome" >> "$case_dir/state/task-x1.meta"
+  hold_home_lifecycle_lock "$subhome/state"
+
+  set +e
+  run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "live home spawn lock must refuse forced secondmate teardown"
+  [ -f "$case_dir/state/task-x1.meta" ] || fail "locked secondmate metadata was removed"
+  [ -d "$subhome" ] || fail "secondmate home owned by spawn was removed"
+  grep -F 'firstmate home lifecycle is owned by another spawn or teardown' "$case_dir/stderr" >/dev/null \
+    || fail "live home lifecycle lock refusal was not explained"
+  pass "forced secondmate teardown excludes concurrent child creation"
 }
 
 test_teardown_prompts_tasks_axi_done_when_compatible() {
@@ -1474,6 +1506,7 @@ test_teardown_retires_valid_rollover_artifacts
 test_teardown_refuses_unsafe_rollover_artifact
 test_teardown_refuses_live_rollover_lock
 test_forced_secondmate_teardown_refuses_live_child_rollover_lock
+test_forced_secondmate_teardown_refuses_live_home_spawn_lock
 test_teardown_prompts_tasks_axi_done_when_compatible
 test_teardown_manual_backend_prompts_hand_edit_even_when_tasks_axi_present
 test_local_only_truly_unpushed_refuses
