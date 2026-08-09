@@ -136,9 +136,11 @@ The first supported path is an ordinary Pi or pi-signed ship on tmux because tha
 Every scout, secondmate, other harness, and other backend is rejected before the old worker exits.
 The capsule is capped at 8 KiB and contains only the current objective, accepted decisions, fixed immutable constraints, branch/revision and artifact pointers, validation/PR pointers, and explicit superseded-instruction markers.
 It never copies historical instructions, reports, chats, logs, private prompts, source, or secret-shaped input.
-The tracked Pi guard revalidates the capsule bytes and operator finalization receipt on every tool boundary, blocks acknowledgment until endpoint, metadata, and worktree preservation are finalized, and blocks every other tool until the exact objective digest is acknowledged.
+The fresh Pi process starts without an objective turn; after endpoint, metadata, and worktree preservation are finalized, the operator submits the capsule prompt through the verified composer path.
+The tracked Pi guard revalidates the capsule bytes and operator finalization receipt on every tool boundary, blocks acknowledgment until finalization, and blocks every other tool until the exact objective digest is acknowledged.
 Identical retries are no-ops when the same generation-bound fresh-session proof is still live.
 The transaction hashes the worktree status before and after, never runs reset/stash/clean/checkout, and stops if endpoint, process, capsule, or worktree preservation cannot be proven.
+Normal teardown validates and retires the capsule plus live, acknowledgment, and finalization proofs without removing unrelated task data.
 Expected benefit is lower first-turn and peak context plus zero superseded-instruction actions; the trade-off is explicit capsule preparation and Pi/tmux-only initial support.
 Measure first-turn/peak context from existing Pi records, obsolete actions from task evidence, and unchanged-wait turns avoided from the bounded suppression counters.
 Roll back the rollover path if two migrations omit necessary context, and roll back quiet-wait suppression if any changed or actionable event is missed or delayed.

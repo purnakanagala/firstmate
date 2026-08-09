@@ -204,6 +204,45 @@ remove_kimi_turnend_auth() {
   rm -f "$hooks_dir/$token"
 }
 
+validate_rollover_cleanup() {
+  local state_dir=$1 data_dir=$2 id=$3 artifact state_device task_data task_device has_state_artifact=0
+  for artifact in "$state_dir/$id.rollover-live" "$state_dir/$id.rollover-ack" \
+    "$state_dir/$id.rollover-finalized"; do
+    [ -e "$artifact" ] || [ -L "$artifact" ] || continue
+    has_state_artifact=1
+  done
+  if [ "$has_state_artifact" -eq 1 ]; then
+    state_device=$(fm_pr_file_device "$state_dir") || return 1
+  fi
+  for artifact in "$state_dir/$id.rollover-live" "$state_dir/$id.rollover-ack" \
+    "$state_dir/$id.rollover-finalized"; do
+    [ -e "$artifact" ] || [ -L "$artifact" ] || continue
+    if ! fm_pr_private_file_valid "$artifact" 600 "$state_device"; then
+      echo "REFUSED: unsafe task rollover artifact; preserving task state." >&2
+      return 1
+    fi
+  done
+  task_data="$data_dir/$id"
+  artifact="$task_data/rollover-capsule.json"
+  [ -e "$artifact" ] || [ -L "$artifact" ] || return 0
+  if [ ! -d "$task_data" ] || [ -L "$task_data" ]; then
+    echo "REFUSED: unsafe task rollover data directory; preserving task state." >&2
+    return 1
+  fi
+  task_device=$(fm_pr_file_device "$task_data") || return 1
+  if ! fm_pr_private_file_valid "$artifact" 600 "$task_device"; then
+    echo "REFUSED: unsafe task rollover capsule; preserving task state." >&2
+    return 1
+  fi
+}
+
+remove_rollover_artifacts() {
+  local state_dir=$1 data_dir=$2 id=$3
+  validate_rollover_cleanup "$state_dir" "$data_dir" "$id" || return 1
+  rm -f "$state_dir/$id.rollover-live" "$state_dir/$id.rollover-ack" \
+    "$state_dir/$id.rollover-finalized" "$data_dir/$id/rollover-capsule.json"
+}
+
 validate_pr_poll_cleanup() {
   local state_dir=$1 id=$2 quarantine state_device artifact has_artifact=0
   fm_task_id_path_safe "$id" || return 0
@@ -945,6 +984,7 @@ validate_firstmate_home_children_removal() {
     [ -e "$child_meta" ] || continue
     child_id=$(basename "$child_meta" .meta)
     validate_pr_poll_cleanup "$sub_state" "$child_id" || return 1
+    validate_rollover_cleanup "$sub_state" "$home/data" "$child_id" || return 1
     child_wt=$(meta_value "$child_meta" worktree)
     child_kind=$(meta_value "$child_meta" kind)
     [ -n "$child_kind" ] || child_kind=ship
@@ -1035,6 +1075,7 @@ cleanup_firstmate_home_children() {
     remove_grok_turnend_auth "$sub_state" "$child_id"
     remove_kimi_turnend_auth "$sub_state" "$child_id"
     remove_pr_poll_artifacts "$sub_state" "$child_id" || return 1
+    remove_rollover_artifacts "$sub_state" "$home/data" "$child_id" || return 1
     rm -f "$sub_state/$child_id.status" "$sub_state/$child_id.turn-ended" \
       "$sub_state/$child_id.meta" "$sub_state/$child_id.pi-ext.ts" \
       "$sub_state/$child_id.grok-turnend-token" "$sub_state/$child_id.kimi-turnend-token"
@@ -1050,6 +1091,7 @@ remove_secondmate_registry_entry() {
 }
 
 validate_pr_poll_cleanup "$STATE" "$ID" || exit 1
+validate_rollover_cleanup "$STATE" "$DATA" "$ID" || exit 1
 
 if [ "$KIND" = secondmate ]; then
   [ -n "$HOME_PATH" ] || HOME_PATH=$WT
@@ -1226,6 +1268,7 @@ fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.
 [ -n "$TASK_TMP" ] && rm -rf "$TASK_TMP"
 remove_pr_poll_artifacts "$STATE" "$ID" || exit 1
+remove_rollover_artifacts "$STATE" "$DATA" "$ID" || exit 1
 rm -f "$STATE/$ID.status" "$STATE/$ID.turn-ended" "$STATE/$ID.meta" \
   "$STATE/$ID.pi-ext.ts" "$STATE/$ID.grok-turnend-token" \
   "$STATE/$ID.kimi-turnend-token"

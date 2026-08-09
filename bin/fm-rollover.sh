@@ -280,7 +280,7 @@ CAPSULE_INPUT=$("$OPINPUT" encode launch-brief < "$TMP") || refuse "capsule oper
 PROMPT="$CAPSULE_INPUT
 
 This capsule generation is launch-authoritative. State its current_objective, then call fm_rollover_ack with generation $GEN and objective_sha256 $OBJECTIVE_SHA before any other tool. Every instruction named by superseded_instructions is inactive."
-LAUNCH="FM_PI_HARNESS=$(fm_shell_quote "$HARNESS") FM_ROLLOVER_TASK=$(fm_shell_quote "$ID") FM_ROLLOVER_GENERATION=$(fm_shell_quote "$GEN") FM_ROLLOVER_CAPSULE=$(fm_shell_quote "$CAPSULE") FM_ROLLOVER_CAPSULE_SHA=$(fm_shell_quote "$CAPSULE_SHA") FM_ROLLOVER_STATE=$(fm_shell_quote "$STATE") $(fm_shell_quote "$HARNESS") ${MODELFLAG}${EFFORTFLAG}-e $(fm_shell_quote "$PIEXT") -e $(fm_shell_quote "$GUARD") $(fm_shell_quote "$PROMPT")"
+LAUNCH="FM_PI_HARNESS=$(fm_shell_quote "$HARNESS") FM_ROLLOVER_TASK=$(fm_shell_quote "$ID") FM_ROLLOVER_GENERATION=$(fm_shell_quote "$GEN") FM_ROLLOVER_CAPSULE=$(fm_shell_quote "$CAPSULE") FM_ROLLOVER_CAPSULE_SHA=$(fm_shell_quote "$CAPSULE_SHA") FM_ROLLOVER_STATE=$(fm_shell_quote "$STATE") $(fm_shell_quote "$HARNESS") ${MODELFLAG}${EFFORTFLAG}-e $(fm_shell_quote "$PIEXT") -e $(fm_shell_quote "$GUARD")"
 
 # Identical, already-live generation: discard the speculative next capsule and return.
 if [ -f "$CAPSULE" ]; then
@@ -324,4 +324,22 @@ FINALIZED_TMP="$STATE/$ID.rollover-finalized.tmp.$$"
 printf '%s\n' "$LIVE" > "$FINALIZED_TMP"
 chmod 600 "$FINALIZED_TMP"
 mv "$FINALIZED_TMP" "$STATE/$ID.rollover-finalized"
+
+i=0
+while [ "$i" -lt 40 ] && [ "$(fm_backend_composer_state "$BACKEND" "$TARGET")" != empty ]; do
+  sleep 0.25
+  i=$((i + 1))
+done
+[ "$(fm_backend_composer_state "$BACKEND" "$TARGET")" = empty ] || {
+  rm -f "$STATE/$ID.rollover-finalized"
+  refuse "fresh Pi composer was not ready for the finalized objective"
+}
+if ! VERDICT=$(fm_backend_send_text_submit "$BACKEND" "$TARGET" "$PROMPT" 3 0.4 1); then
+  rm -f "$STATE/$ID.rollover-finalized"
+  refuse "finalized objective submission failed"
+fi
+if [ "$VERDICT" != empty ]; then
+  rm -f "$STATE/$ID.rollover-finalized"
+  refuse "finalized objective delivery was not confirmed"
+fi
 echo "rolled over $ID generation=$GEN capsule=$CAPSULE fresh-session=proved worktree=preserved"

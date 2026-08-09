@@ -53,7 +53,7 @@ Use that value for interrupt, exit, resume, rollover, and skill-invocation facts
 
 Load this skill before invoking `bin/fm-rollover.sh`.
 The script currently supports only an ordinary `kind=ship` worker recorded as `pi` or `pi-signed` on the tmux backend.
-It exits the current Pi session cleanly, retains the exact endpoint and isolated worktree, launches a new Pi process with a generation-bound current-objective capsule, finalizes the generation only after preservation and ownership checks, and requires the fresh worker to call `fm_rollover_ack` before any other tool.
+It exits the current Pi session cleanly, retains the exact endpoint and isolated worktree, launches a new guarded Pi process without an objective turn, finalizes the generation only after preservation and ownership checks, then submits the capsule prompt through the verified composer path and requires the fresh worker to call `fm_rollover_ack` before any other tool.
 The existing task Pi turn-end extension remains loaded, and no-mistakes ownership and response mechanics do not change.
 A byte-bounded capsule stores pointers rather than brief, report, chat, log, prompt, or source content.
 Repeated invocation with the same capsule semantics and matching live fresh-session proof is a no-op.

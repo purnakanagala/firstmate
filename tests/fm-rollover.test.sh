@@ -68,11 +68,20 @@ case "$1" in
     if [ "${4:-}" = -l ]; then
       printf '%s' "${5:-}" > "$root/input"
     elif [ "${4:-}" = Enter ]; then
-      if [ "$(cat "$root/input" 2>/dev/null || true)" = /quit ]; then printf 'zsh\n' > "$root/agent"; fi
+      input=$(cat "$root/input" 2>/dev/null || true)
+      if [ "$input" = /quit ]; then
+        printf 'zsh\n' > "$root/agent"
+      elif [ -n "$input" ]; then
+        [ -f "$FM_HOME/state/task.rollover-finalized" ] || exit 1
+        printf '%s\n' "$input" > "$root/objective-prompt"
+        printf 'after-finalization\n' >> "$root/prompt-order"
+      fi
+      : > "$root/input"
     else
       command=${4:-}
       case "$command" in
         *FM_ROLLOVER_GENERATION=*)
+          printf '%s\n' "$command" > "$root/launch-command"
           gen=$(printf '%s' "$command" | sed -n "s/.*FM_ROLLOVER_GENERATION='\([^']*\)'.*/\1/p")
           sha=$(printf '%s' "$command" | sed -n "s/.*FM_ROLLOVER_CAPSULE_SHA='\([^']*\)'.*/\1/p")
           state=$(printf '%s' "$command" | sed -n "s/.*FM_ROLLOVER_STATE='\([^']*\)'.*/\1/p")
@@ -151,6 +160,11 @@ CAPSULE="$HOME1/data/task/rollover-capsule.json"
 [ "$(grep -c '^pi$' "$TMP/harness-execs")" = 1 ] || fail "provider-free Pi executable double was not invoked"
 [ "$(cat "$HOME1/state/task.rollover-finalized")" = "$(cat "$HOME1/state/task.rollover-live")" ] \
   || fail "operator finalization did not bind the live process proof"
+[ "$(cat "$TMP/prompt-order")" = after-finalization ] || fail "objective prompt was not submitted after finalization"
+grep -F 'fm_rollover_ack with generation 1' "$TMP/objective-prompt" >/dev/null \
+  || fail "finalized objective prompt was not submitted to the fresh Pi worker"
+! grep -F 'fm_rollover_ack' "$TMP/launch-command" >/dev/null \
+  || fail "Pi launch still included the objective turn before finalization"
 
 cp "$HOME1/state/task.meta" "$HOME1/state/duplicate.meta"
 if run_rollover >/dev/null 2>&1; then fail "ambiguous duplicate endpoint ownership was not refused"; fi

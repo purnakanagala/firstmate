@@ -492,6 +492,7 @@ run_teardown() {
   local case_dir=$1; shift
   FM_ROOT_OVERRIDE="$ROOT" \
   FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_DATA_OVERRIDE="$case_dir/data" \
   FM_CONFIG_OVERRIDE="$case_dir/config" \
   PATH="$case_dir/fakebin:$PATH" \
     "$TEARDOWN" task-x1 "$@"
@@ -512,6 +513,46 @@ test_local_only_fork_remote_allows() {
   expect_code 0 "$rc" "fork-allow: teardown should succeed when HEAD is on a fork remote"
   ! grep -q REFUSED "$case_dir/stderr" || fail "fork-allow: teardown printed a REFUSED line"
   pass "local-only worktree with HEAD on a fork remote is torn down (fix holds)"
+}
+
+test_teardown_retires_valid_rollover_artifacts() {
+  local case_dir artifact
+  case_dir=$(make_case rollover-cleanup)
+  write_meta "$case_dir" no-mistakes ship
+  mkdir -p "$case_dir/data/task-x1"
+  printf '%s\n' keep > "$case_dir/data/task-x1/keep.txt"
+  for artifact in rollover-live rollover-ack rollover-finalized; do
+    printf '%s\n' proof > "$case_dir/state/task-x1.$artifact"
+    chmod 600 "$case_dir/state/task-x1.$artifact"
+  done
+  printf '%s\n' '{}' > "$case_dir/data/task-x1/rollover-capsule.json"
+  chmod 600 "$case_dir/data/task-x1/rollover-capsule.json"
+
+  run_teardown "$case_dir" >/dev/null || fail "teardown failed while retiring rollover artifacts"
+  for artifact in rollover-live rollover-ack rollover-finalized; do
+    [ ! -e "$case_dir/state/task-x1.$artifact" ] || fail "teardown retained $artifact"
+  done
+  [ ! -e "$case_dir/data/task-x1/rollover-capsule.json" ] || fail "teardown retained rollover capsule"
+  [ -f "$case_dir/data/task-x1/keep.txt" ] || fail "teardown removed unrelated task data"
+  pass "teardown retires exact rollover artifacts and preserves other task data"
+}
+
+test_teardown_refuses_unsafe_rollover_artifact() {
+  local case_dir rc
+  case_dir=$(make_case rollover-unsafe)
+  write_meta "$case_dir" no-mistakes ship
+  ln -s "$case_dir/state/task-x1.meta" "$case_dir/state/task-x1.rollover-live"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "unsafe rollover artifact must refuse teardown"
+  [ -f "$case_dir/state/task-x1.meta" ] || fail "unsafe rollover artifact was followed during teardown"
+  grep -F 'unsafe task rollover artifact' "$case_dir/stderr" >/dev/null \
+    || fail "unsafe rollover refusal was not explained"
+  pass "teardown validates rollover artifacts before destructive cleanup"
 }
 
 test_teardown_prompts_tasks_axi_done_when_compatible() {
@@ -1372,6 +1413,8 @@ test_herdr_projection_teardown_retains_journal_when_close_unconfirmed() {
 }
 
 test_local_only_fork_remote_allows
+test_teardown_retires_valid_rollover_artifacts
+test_teardown_refuses_unsafe_rollover_artifact
 test_teardown_prompts_tasks_axi_done_when_compatible
 test_teardown_manual_backend_prompts_hand_edit_even_when_tasks_axi_present
 test_local_only_truly_unpushed_refuses
