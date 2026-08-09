@@ -232,6 +232,10 @@
       "audience": "operator-example"
     },
     {
+      "path": "docs/examples/launcher.conf",
+      "audience": "operator-example"
+    },
+    {
       "path": "docs/examples/wedge-alarm",
       "audience": "operator-example"
     },
@@ -249,6 +253,10 @@
     },
     {
       "path": "docs/herdr-backend.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "docs/launcher.md",
       "audience": "operator-current"
     },
     {
