@@ -180,7 +180,7 @@ pane_shell_pid() {  # <pane-id>
 # foreground process, and killing that alone would not touch the agent.
 pane_pi_pid() {
   HERDR_SESSION="$SESSION" herdr pane process-info --pane "$1" --session "$SESSION" 2>/dev/null \
-    | jq -r '[.result.process_info.foreground_processes[]? | select(.argv0=="pi" or .name=="pi")][0].pid // empty'
+    | jq -r '[.result.process_info.foreground_processes[]? | select(.argv0=="pi" or .argv[0]=="pi" or .name=="pi")][0].pid // empty'
 }
 
 wait_for_pi_pid() {  # <pane-id>

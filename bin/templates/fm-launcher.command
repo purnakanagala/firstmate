@@ -732,7 +732,7 @@ if [ "$MODE" = adopt-current ]; then
        | select($args[$i] == $flag and ($i + 1) < ($args | length))
        | $args[$i + 1]];
     [.result.process_info.foreground_processes[]?
-     | select(.argv0 == $n or .name == $n)
+     | select(.argv0 == $n or .argv[0] == $n or .name == $n)
      | .argv as $argv
      | select(($argv | type) == "array" and all($argv[]; type == "string"))
      | select(flag_values($argv; "--model") == [$model])
