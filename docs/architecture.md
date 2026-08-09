@@ -142,7 +142,8 @@ Identical retries are no-ops when the same generation-bound fresh-session proof 
 The transaction hashes the worktree status before and after, never runs reset/stash/clean/checkout, and stops if endpoint, process, capsule, or worktree preservation cannot be proven.
 Normal teardown validates and retires the capsule plus live, acknowledgment, and finalization proofs without removing unrelated task data.
 Spawn, rollover, and teardown serialize each task through the same home-local transaction lock.
-Spawn also holds a home-wide lifecycle lock, and secondmate teardown holds that same lock before enumerating children through removal, including nested secondmate homes during forced cleanup.
+A spawn running inside a secondmate home also holds that home's lifecycle lock, and secondmate teardown holds the same lock before enumerating children through removal, including nested secondmate homes during forced cleanup.
+Independent primary-home task spawns continue to compose through their task locks and any backend-specific ordering lock.
 Expected benefit is lower first-turn and peak context plus zero superseded-instruction actions; the trade-off is explicit capsule preparation and Pi-family/tmux-only initial support.
 Measure first-turn/peak context from existing Pi records, obsolete actions from task evidence, and unchanged-wait turns avoided from the bounded suppression counters.
 Roll back the rollover path if two migrations omit necessary context, and roll back quiet-wait suppression if any changed or actionable event is missed or delayed.

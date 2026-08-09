@@ -133,11 +133,12 @@ test_no_profile_keeps_claude_profile_defaults() {
   pass "no --model/--effort records defaults and types the claude launch instructions"
 }
 
-test_spawn_refuses_home_owned_by_teardown() {
+test_secondmate_home_spawn_refuses_home_owned_by_teardown() {
   local rec id out status
   id=profile-home-lock-z17
   rec=$(make_spawn_case profile-home-lock claude "$id")
   read_case_record "$rec"
+  printf '%s\n' secondmate-z1 > "$HOME_DIR/.fm-secondmate-home"
   hold_home_lifecycle_lock "$HOME_DIR/state"
 
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR")
@@ -147,7 +148,23 @@ test_spawn_refuses_home_owned_by_teardown() {
     "spawn did not explain the home lifecycle refusal"
   assert_absent "$HOME_DIR/state/$id.meta" "home lifecycle refusal wrote task metadata"
   [ ! -s "$LAUNCH_LOG" ] || fail "home lifecycle refusal typed a launch command"
-  pass "spawn refuses while teardown owns the firstmate home"
+  pass "spawn inside a secondmate home refuses while teardown owns that home"
+}
+
+test_primary_home_spawn_ignores_secondmate_lifecycle_lock() {
+  local rec id out status
+  id=profile-primary-home-lock-z18
+  rec=$(make_spawn_case profile-primary-home-lock claude "$id")
+  read_case_record "$rec"
+  hold_home_lifecycle_lock "$HOME_DIR/state"
+
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR")
+  status=$?
+  expect_code 0 "$status" "primary-home spawn should not contend on the secondmate lifecycle lock"
+  assert_contains "$out" "spawned $id harness=claude" "primary-home spawn did not complete"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" claude default default
+  [ -s "$LAUNCH_LOG" ] || fail "primary-home spawn did not type a launch command"
+  pass "independent primary-home task spawns do not take the secondmate lifecycle lock"
 }
 
 test_active_dispatch_profile_requires_explicit_harness_for_ship() {
@@ -482,7 +499,8 @@ test_active_dispatch_profile_does_not_block_secondmate_launch() {
 }
 
 test_no_profile_keeps_claude_profile_defaults
-test_spawn_refuses_home_owned_by_teardown
+test_secondmate_home_spawn_refuses_home_owned_by_teardown
+test_primary_home_spawn_ignores_secondmate_lifecycle_lock
 test_active_dispatch_profile_requires_explicit_harness_for_ship
 test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness

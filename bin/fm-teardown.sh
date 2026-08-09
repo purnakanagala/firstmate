@@ -151,6 +151,10 @@ teardown_task_lock_acquire() {
 
 teardown_home_lifecycle_lock_acquire() {
   local state_dir=$1 lock
+  # A valid idle secondmate home may not have created state/ yet. Materialize the
+  # lock namespace inside that already-validated home before taking ownership;
+  # otherwise the generic lock helper cannot publish an owner beneath it.
+  mkdir -p "$state_dir" || return 1
   lock="$state_dir/.spawn-home.lock"
   teardown_lock_acquire "$lock" \
     "REFUSED: firstmate home lifecycle is owned by another spawn or teardown; preserving home state."

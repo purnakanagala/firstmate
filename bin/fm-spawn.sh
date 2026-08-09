@@ -385,12 +385,17 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
 fi
 ID=${POS[0]}
 fm_task_id_creation_valid "$ID" || { echo "error: invalid task id" >&2; exit 2; }
-SPAWN_HOME_LIFECYCLE_LOCK="$STATE/.spawn-home.lock"
-if ! fm_lock_try_acquire "$SPAWN_HOME_LIFECYCLE_LOCK"; then
-  echo "error: firstmate home lifecycle is owned by another spawn or teardown" >&2
-  exit 1
+# Only a spawn running inside a secondmate home can race that home's parent-owned
+# teardown. Primary-home task spawns remain independently serialized by task id,
+# and Herdr presentation mutations retain their session-wide ordering lock.
+if [ -f "$FM_HOME/$SUB_HOME_MARKER" ]; then
+  SPAWN_HOME_LIFECYCLE_LOCK="$STATE/.spawn-home.lock"
+  if ! fm_lock_try_acquire "$SPAWN_HOME_LIFECYCLE_LOCK"; then
+    echo "error: firstmate home lifecycle is owned by another spawn or teardown" >&2
+    exit 1
+  fi
+  SPAWN_HOME_LIFECYCLE_LOCK_HELD=1
 fi
-SPAWN_HOME_LIFECYCLE_LOCK_HELD=1
 SPAWN_TASK_LOCK="$STATE/.spawn-$ID.lock"
 if ! fm_lock_try_acquire "$SPAWN_TASK_LOCK"; then
   echo "error: another spawn is already creating task $ID" >&2
