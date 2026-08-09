@@ -102,6 +102,8 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-lock-lib.sh
 . "$SCRIPT_DIR/fm-lock-lib.sh"
+# shellcheck source=bin/fm-wake-lib.sh
+. "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-gate-refuse-lib.sh
 . "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
@@ -117,6 +119,31 @@ FORCE=${2:-}
 fm_refuse_if_gate_agent
 FM_LOCK_LOG_PREFIX=teardown
 "$FM_ROOT/bin/fm-guard.sh" || true
+
+TEARDOWN_TASK_LOCKS=()
+teardown_task_locks_release() {
+  local status=$? index
+  for ((index=${#TEARDOWN_TASK_LOCKS[@]} - 1; index >= 0; index--)); do
+    fm_lock_release "${TEARDOWN_TASK_LOCKS[$index]}" || true
+  done
+  return "$status"
+}
+trap teardown_task_locks_release EXIT
+
+teardown_task_lock_acquire() {
+  local state_dir=$1 id=$2 lock held
+  lock="$state_dir/.spawn-$id.lock"
+  for held in "${TEARDOWN_TASK_LOCKS[@]+"${TEARDOWN_TASK_LOCKS[@]}"}"; do
+    [ "$held" = "$lock" ] && return 0
+  done
+  if ! fm_lock_try_acquire "$lock"; then
+    echo "REFUSED: task $id is owned by another spawn, rollover, or teardown; preserving task state." >&2
+    return 1
+  fi
+  TEARDOWN_TASK_LOCKS+=("$lock")
+}
+
+teardown_task_lock_acquire "$STATE" "$ID" || exit 1
 
 META="$STATE/$ID.meta"
 [ -f "$META" ] || { echo "error: no meta for task $ID at $META" >&2; exit 1; }
@@ -983,6 +1010,7 @@ validate_firstmate_home_children_removal() {
   for child_meta in "$sub_state"/*.meta; do
     [ -e "$child_meta" ] || continue
     child_id=$(basename "$child_meta" .meta)
+    teardown_task_lock_acquire "$sub_state" "$child_id" || return 1
     validate_pr_poll_cleanup "$sub_state" "$child_id" || return 1
     validate_rollover_cleanup "$sub_state" "$home/data" "$child_id" || return 1
     child_wt=$(meta_value "$child_meta" worktree)
@@ -1015,6 +1043,7 @@ cleanup_firstmate_home_children() {
   for child_meta in "$sub_state"/*.meta; do
     [ -e "$child_meta" ] || continue
     child_id=$(basename "$child_meta" .meta)
+    teardown_task_lock_acquire "$sub_state" "$child_id" || return 1
     child_wt=$(meta_value "$child_meta" worktree)
     child_proj=$(meta_value "$child_meta" project)
     child_kind=$(meta_value "$child_meta" kind)
@@ -1220,8 +1249,6 @@ if [ "$BACKEND" = herdr ] \
 fi
 
 if [ "$HERDR_PRESENTATION_RETIRE_CANDIDATE" = 1 ]; then
-  # shellcheck source=bin/fm-wake-lib.sh
-  . "$SCRIPT_DIR/fm-wake-lib.sh"
   HERDR_PRESENTATION_FOCUS_LOCK=
   HERDR_PRESENTATION_FOCUS_LOCK_HELD=0
   HERDR_PRESENTATION_FOCUS_LOCK_ATTEMPT=0

@@ -498,6 +498,15 @@ run_teardown() {
     "$TEARDOWN" task-x1 "$@"
 }
 
+hold_task_lock() {
+  local state_dir=$1 id=$2 lock owner
+  lock="$state_dir/.spawn-$id.lock"
+  owner="$lock.owner.test"
+  mkdir "$owner"
+  printf '%s\n' "$$" > "$owner/pid"
+  ln -s "$owner" "$lock"
+}
+
 test_local_only_fork_remote_allows() {
   local case_dir rc
   case_dir=$(make_case fork-allow)
@@ -553,6 +562,54 @@ test_teardown_refuses_unsafe_rollover_artifact() {
   grep -F 'unsafe task rollover artifact' "$case_dir/stderr" >/dev/null \
     || fail "unsafe rollover refusal was not explained"
   pass "teardown validates rollover artifacts before destructive cleanup"
+}
+
+test_teardown_refuses_live_rollover_lock() {
+  local case_dir rc
+  case_dir=$(make_case rollover-lock)
+  write_meta "$case_dir" no-mistakes ship
+  hold_task_lock "$case_dir/state" task-x1
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "live rollover lock must refuse teardown"
+  [ -f "$case_dir/state/task-x1.meta" ] || fail "locked task metadata was removed"
+  [ -d "$case_dir/wt" ] || fail "locked task worktree was removed"
+  grep -F 'another spawn, rollover, or teardown' "$case_dir/stderr" >/dev/null \
+    || fail "live rollover lock refusal was not explained"
+  pass "teardown refuses before touching a task owned by rollover"
+}
+
+test_forced_secondmate_teardown_refuses_live_child_rollover_lock() {
+  local case_dir subhome rc
+  case_dir=$(make_case child-rollover-lock)
+  subhome="$case_dir/secondmate-home"
+  mkdir -p "$subhome/state" "$subhome/data" "$subhome/config" "$subhome/projects"
+  printf '%s\n' task-x1 > "$subhome/.fm-secondmate-home"
+  write_meta "$case_dir" local-only secondmate
+  printf 'home=%s\n' "$subhome" >> "$case_dir/state/task-x1.meta"
+  fm_write_meta "$subhome/state/child.meta" \
+    'window=firstmate:fm-child' \
+    'worktree=' \
+    "project=$case_dir/project" \
+    'kind=ship' \
+    'mode=no-mistakes'
+  hold_task_lock "$subhome/state" child
+
+  set +e
+  run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "live child rollover lock must refuse forced secondmate teardown"
+  [ -f "$subhome/state/child.meta" ] || fail "locked child metadata was removed"
+  [ -d "$subhome" ] || fail "secondmate home with a locked child was removed"
+  grep -F 'task child is owned by another spawn, rollover, or teardown' "$case_dir/stderr" >/dev/null \
+    || fail "live child rollover lock refusal was not explained"
+  pass "forced secondmate teardown holds child transaction boundaries"
 }
 
 test_teardown_prompts_tasks_axi_done_when_compatible() {
@@ -1415,6 +1472,8 @@ test_herdr_projection_teardown_retains_journal_when_close_unconfirmed() {
 test_local_only_fork_remote_allows
 test_teardown_retires_valid_rollover_artifacts
 test_teardown_refuses_unsafe_rollover_artifact
+test_teardown_refuses_live_rollover_lock
+test_forced_secondmate_teardown_refuses_live_child_rollover_lock
 test_teardown_prompts_tasks_axi_done_when_compatible
 test_teardown_manual_backend_prompts_hand_edit_even_when_tasks_axi_present
 test_local_only_truly_unpushed_refuses
