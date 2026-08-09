@@ -13,6 +13,7 @@ const state = process.env.FM_ROLLOVER_STATE ?? "";
 const harness = process.env.FM_PI_HARNESS ?? "";
 const livePath = `${state}/${task}.rollover-live`;
 const ackPath = `${state}/${task}.rollover-ack`;
+const finalizedPath = `${state}/${task}.rollover-finalized`;
 
 type Capsule = {
   schema: string;
@@ -53,17 +54,23 @@ function acknowledged(): boolean {
   }
 }
 
+function finalized(): boolean {
+  try {
+    capsule();
+    const line = readFileSync(finalizedPath, "utf8").trim();
+    return line === `${generation}\t${expectedCapsuleSha}\t${process.pid}\t${harness}`;
+  } catch {
+    return false;
+  }
+}
+
 export default function (pi: ExtensionAPI) {
-  let valid = false;
   let objectiveSha = "";
   try {
     const current = capsule();
     objectiveSha = current.value.objective_sha256;
-    valid = true;
     atomicWrite(livePath, `${generation}\t${expectedCapsuleSha}\t${process.pid}\t${harness}\n`);
-  } catch {
-    valid = false;
-  }
+  } catch {}
 
   pi.registerTool?.({
     name: "fm_rollover_ack",
@@ -74,7 +81,9 @@ export default function (pi: ExtensionAPI) {
       objective_sha256: Type.String(),
     }),
     execute: async (_toolCallId, params) => {
-      if (!valid) throw new Error("rollover capsule validation failed; no action is permitted");
+      if (!finalized()) throw new Error("rollover is not operator-finalized; no action is permitted");
+      const current = capsule();
+      objectiveSha = current.value.objective_sha256;
       const input = params as { generation: number; objective_sha256: string };
       if (String(input.generation) !== generation || input.objective_sha256 !== objectiveSha) {
         throw new Error("rollover acknowledgment does not match the current capsule generation/objective");
@@ -89,7 +98,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("tool_call", (event) => {
     if (event.type !== "tool_call" || event.toolName === "fm_rollover_ack") return {};
-    if (!valid) return { block: true, reason: "rollover capsule validation failed; stop without acting" };
+    if (!finalized()) return { block: true, reason: "rollover capsule or operator finalization is invalid; stop without acting" };
     if (!acknowledged()) {
       return { block: true, reason: `acknowledge rollover generation ${generation} with fm_rollover_ack before any other tool` };
     }

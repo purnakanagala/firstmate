@@ -3,6 +3,7 @@
 # tmux endpoint and isolated worktree, preserving every worktree byte.
 # Usage: FM_HOME=<home> fm-rollover.sh <task-id> --objective <one-line-objective>
 #          [--decision <one-line-accepted-decision>]... --supersedes <marker>...
+#          --non-secret-reviewed
 #        fm-rollover.sh --validate <capsule.json>
 #
 # This script is the authoritative owner of fm-rollover-capsule.v1 and rollover
@@ -39,6 +40,7 @@ sha256_stdin() {
 }
 meta_get() { grep -E "^$2=" "$1" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
 refuse() { echo "error: $*" >&2; exit 1; }
+IMMUTABLE_CONSTRAINTS_JSON='["Preserve the existing isolated worktree and every unlanded change; never reset, stash, discard, or change ownership.","Keep Firstmate approval, merge, destructive-action, security, secondmate, scout, X-mode, and multi-home boundaries unchanged.","Keep no-mistakes authority unchanged; one worker owns an active run and its synchronous responses.","Do not execute any superseded instruction; stop on capsule or generation mismatch.","Do not expose secrets, private prompts, chats, logs, reports, or source through rollover state."]'
 worktree_state_digest() {  # <worktree>
   local wt=$1 file
   {
@@ -107,7 +109,7 @@ live_process_matches() {  # <live-line> <target> <harness>
 capsule_text_is_safe() {  # <text>
   local value=$1
   printf '%s' "$value" | LC_ALL=C grep -qE '^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/_#+-]*$' || return 1
-  printf '%s' "$value" | LC_ALL=C grep -qiE '(BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|(^|[^[:alnum:]_])(password|passwd|pwd|token|secret|api[ _-]?key|authorization|credential)([^[:alnum:]_]|$)|bearer[[:space:]]|://|(^|[^[:alnum:]_])(sk-|gh[pousr]_|glpat-|xox[baprs]-)|[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|[A-Za-z0-9._/-]{24,})' \
+  printf '%s' "$value" | LC_ALL=C grep -qiE '(BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|(^|[^[:alnum:]_])(password|passwd|pwd|token|secret|api[ _-]?key|authorization|credential)([^[:alnum:]_]|$)|bearer[[:space:]]|://|(^|[^[:alnum:]_])(sk-|gh[pousr]_|glpat-|xox[baprs]-|A(KIA|SIA)[A-Z0-9]{16})|[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|[A-Za-z0-9._/-]{24,})' \
     && return 1
   return 0
 }
@@ -117,7 +119,7 @@ validate_capsule() {
   [ -f "$file" ] && [ ! -L "$file" ] || refuse "capsule must be a regular file"
   bytes=$(wc -c < "$file" | tr -d '[:space:]')
   [ "$bytes" -le 8192 ] || refuse "capsule exceeds 8192 bytes"
-  jq -e '
+  jq -e --argjson immutable "$IMMUTABLE_CONSTRAINTS_JSON" '
     type == "object" and
     (keys | sort) == (["accepted_decisions","artifacts","current_objective","generation","immutable_constraints","objective_sha256","schema","superseded_instructions","task","validation"] | sort) and
     .schema == "fm-rollover-capsule.v1" and
@@ -126,9 +128,17 @@ validate_capsule() {
     (.current_objective | type == "string" and length >= 1 and length <= 2048 and (contains("\\n") | not)) and
     (.objective_sha256 | type == "string" and test("^[a-f0-9]{64}$")) and
     (.accepted_decisions | type == "array" and length <= 20 and all(type == "string" and length >= 1 and length <= 512 and (contains("\\n") | not))) and
-    (.immutable_constraints | type == "array" and length == 5 and all(type == "string")) and
-    (.artifacts | type == "object" and (keys | sort) == (["brief","report","worktree"] | sort) and all(.[]; type == "string")) and
-    (.validation | type == "object" and (keys | sort) == (["branch","mode","pr","pr_head","revision"] | sort) and all(.[]; type == "string")) and
+    .immutable_constraints == $immutable and
+    (.artifacts | type == "object" and (keys | sort) == (["brief","report","worktree"] | sort) and
+      (.worktree | type == "string" and length >= 1 and length <= 2048 and test("^/[A-Za-z0-9 ._/+()-]+$") and (contains("://") | not)) and
+      (.brief | type == "string" and test("^$|^data/[A-Za-z0-9._-]+/brief[.]md$")) and
+      (.report | type == "string" and test("^$|^data/[A-Za-z0-9._-]+/report[.]md$"))) and
+    (.validation | type == "object" and (keys | sort) == (["branch","mode","pr","pr_head","revision"] | sort) and
+      (.branch | type == "string" and test("^detached$|^[A-Za-z0-9._/-]{1,256}$")) and
+      (.mode | type == "string" and test("^[A-Za-z0-9._-]{0,64}$")) and
+      (.pr | type == "string" and test("^$|^[0-9]+$|^https://[A-Za-z0-9.-]+/[A-Za-z0-9._~/%+-]+$")) and
+      (.pr_head | type == "string" and test("^$|^[A-Fa-f0-9]{7,64}$|^[A-Za-z0-9._/-]{1,256}$")) and
+      (.revision | type == "string" and test("^[A-Fa-f0-9]{40,64}$"))) and
     (.superseded_instructions | type == "object" and (keys | sort) == (["generation_marker","markers"] | sort) and
       (.generation_marker | type == "string" and test("^generation-[0-9]+$")) and
       (.markers | type == "array" and length >= 1 and length <= 20 and all(type == "string" and length >= 1 and length <= 256 and (contains("\\n") | not))))
@@ -154,11 +164,13 @@ case "$ID" in ''|*[!A-Za-z0-9._-]*) refuse "invalid task id" ;; esac
 OBJECTIVE=
 DECISIONS=()
 SUPERSEDES=()
+NON_SECRET_REVIEWED=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --objective) [ "$#" -ge 2 ] || refuse "--objective requires a value"; OBJECTIVE=$2; shift 2 ;;
     --decision) [ "$#" -ge 2 ] || refuse "--decision requires a value"; DECISIONS+=("$2"); shift 2 ;;
     --supersedes) [ "$#" -ge 2 ] || refuse "--supersedes requires a value"; SUPERSEDES+=("$2"); shift 2 ;;
+    --non-secret-reviewed) NON_SECRET_REVIEWED=1; shift ;;
     *) refuse "unknown argument: $1" ;;
   esac
 done
@@ -166,6 +178,7 @@ done
 [ "${#OBJECTIVE}" -le 2048 ] && [[ "$OBJECTIVE" != *$'\n'* ]] || refuse "objective must be one line and at most 2048 bytes"
 [ "${#SUPERSEDES[@]}" -ge 1 ] && [ "${#SUPERSEDES[@]}" -le 20 ] || refuse "provide 1-20 --supersedes markers"
 [ "${#DECISIONS[@]}" -le 20 ] || refuse "at most 20 accepted decisions are allowed"
+[ "$NON_SECRET_REVIEWED" -eq 1 ] || refuse "--non-secret-reviewed is required after reviewing all free-text capsule inputs"
 for value in "$OBJECTIVE" "${DECISIONS[@]+"${DECISIONS[@]}"}" "${SUPERSEDES[@]+"${SUPERSEDES[@]}"}"; do
   [ "${#value}" -le 512 ] || [ "$value" = "$OBJECTIVE" ] || refuse "decision/marker exceeds 512 bytes"
   [[ "$value" != *$'\n'* ]] || refuse "capsule inputs must be one line"
@@ -221,6 +234,7 @@ CURRENT_SHA=
 META_GEN=$(meta_get "$META" rollover_generation)
 META_CAPSULE=$(meta_get "$META" rollover_capsule)
 LIVE=$(cat "$STATE/$ID.rollover-live" 2>/dev/null || true)
+FINALIZED=$(cat "$STATE/$ID.rollover-finalized" 2>/dev/null || true)
 if [ -e "$CAPSULE" ] || [ -L "$CAPSULE" ]; then
   [ -f "$CAPSULE" ] && [ ! -L "$CAPSULE" ] || refuse "existing rollover capsule is unsafe"
   validate_capsule "$CAPSULE"
@@ -230,8 +244,9 @@ if [ -e "$CAPSULE" ] || [ -L "$CAPSULE" ]; then
     || refuse "existing rollover capsule and metadata generation do not match"
   [[ "$LIVE" = "$PREV"$'\t'"$CURRENT_SHA"$'\t'* ]] && live_process_matches "$LIVE" "$TARGET" "$HARNESS" \
     || refuse "existing rollover generation has no matching live process proof"
+  [ "$FINALIZED" = "$LIVE" ] || refuse "existing rollover generation is not operator-finalized"
 else
-  [ -z "$META_GEN" ] && [ -z "$META_CAPSULE" ] && [ -z "$LIVE" ] && [ ! -e "$STATE/$ID.rollover-ack" ] \
+  [ -z "$META_GEN" ] && [ -z "$META_CAPSULE" ] && [ -z "$LIVE" ] && [ -z "$FINALIZED" ] && [ ! -e "$STATE/$ID.rollover-ack" ] \
     || refuse "rollover generation state exists without its capsule"
 fi
 GEN=$((PREV + 1))
@@ -250,16 +265,10 @@ umask 077
 jq -n --arg task "$ID" --argjson generation "$GEN" --arg objective "$OBJECTIVE" --arg objective_sha "$OBJECTIVE_SHA" \
   --argjson decisions "$DECISIONS_JSON" --arg worktree "$WT_REAL" --arg brief "$BRIEF_PTR" --arg report "$REPORT_PTR" \
   --arg branch "$BRANCH" --arg mode "$MODE" --arg pr "$PR" --arg pr_head "$PR_HEAD" --arg revision "$REV" --arg marker "generation-$PREV" \
-  --argjson supersedes "$SUPERSEDES_JSON" '{
+  --argjson supersedes "$SUPERSEDES_JSON" --argjson immutable "$IMMUTABLE_CONSTRAINTS_JSON" '{
     schema:"fm-rollover-capsule.v1", task:$task, generation:$generation,
     current_objective:$objective, objective_sha256:$objective_sha, accepted_decisions:$decisions,
-    immutable_constraints:[
-      "Preserve the existing isolated worktree and every unlanded change; never reset, stash, discard, or change ownership.",
-      "Keep Firstmate approval, merge, destructive-action, security, secondmate, scout, X-mode, and multi-home boundaries unchanged.",
-      "Keep no-mistakes authority unchanged; one worker owns an active run and its synchronous responses.",
-      "Do not execute any superseded instruction; stop on capsule or generation mismatch.",
-      "Do not expose secrets, private prompts, chats, logs, reports, or source through rollover state."
-    ],
+    immutable_constraints:$immutable,
     artifacts:{worktree:$worktree,brief:$brief,report:$report},
     validation:{branch:$branch,mode:$mode,pr:$pr,pr_head:$pr_head,revision:$revision},
     superseded_instructions:{generation_marker:$marker,markers:$supersedes}
@@ -284,7 +293,7 @@ if [ -f "$CAPSULE" ]; then
   fi
 fi
 mv "$TMP" "$CAPSULE"
-rm -f "$STATE/$ID.rollover-live" "$STATE/$ID.rollover-ack"
+rm -f "$STATE/$ID.rollover-live" "$STATE/$ID.rollover-ack" "$STATE/$ID.rollover-finalized"
 
 VERDICT=$(fm_backend_send_text_submit "$BACKEND" "$TARGET" /quit 3 0.4 1) || refuse "Pi quit submission failed"
 [ "$VERDICT" = empty ] || refuse "Pi quit was not confirmed"
@@ -311,4 +320,8 @@ META_TMP="$META.tmp.$$"
 awk '!/^rollover_generation=/ && !/^rollover_capsule=/' "$META" > "$META_TMP"
 printf 'rollover_generation=%s\nrollover_capsule=%s\n' "$GEN" "$CAPSULE" >> "$META_TMP"
 mv "$META_TMP" "$META"
+FINALIZED_TMP="$STATE/$ID.rollover-finalized.tmp.$$"
+printf '%s\n' "$LIVE" > "$FINALIZED_TMP"
+chmod 600 "$FINALIZED_TMP"
+mv "$FINALIZED_TMP" "$STATE/$ID.rollover-finalized"
 echo "rolled over $ID generation=$GEN capsule=$CAPSULE fresh-session=proved worktree=preserved"
