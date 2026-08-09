@@ -5,20 +5,21 @@ It is a convenience wrapper around already-supported Herdr and Pi entry points, 
 
 ## Install
 
-1. Copy [`examples/launcher.conf`](examples/launcher.conf) to `config/launcher.conf` in this checkout and fill in every required field: `model`, `thinking`, `pi_bin`, `quota_provider`.
+1. Install Herdr as described in the [Herdr backend guide](herdr-backend.md), plus Pi, `jq`, and `quota-axi`; the launcher refuses if a required tool, supported Herdr protocol, pinned Pi model, or fresh first-party OAuth quota result is unavailable.
+2. Copy [`examples/launcher.conf`](examples/launcher.conf) to `config/launcher.conf` in this checkout and fill in every required field: `model`, `thinking`, `pi_bin`, `quota_provider`.
    `config/launcher.conf` is local and gitignored; the installer refuses to run without it, and never guesses a captain-specific model, reasoning level, executable, or quota provider on your behalf.
-2. Run `bin/fm-install-launcher.sh <destination-directory>`, for example `bin/fm-install-launcher.sh ~/Desktop`.
+3. Run `bin/fm-install-launcher.sh <destination-directory>`, for example `bin/fm-install-launcher.sh ~/Desktop`.
    It resolves this exact checkout's own root as the installed launcher's Firstmate home - never relative to the destination - and writes `fm-launcher.command` (mode `0700`) plus a generated `fm-launcher.conf` (mode `0600`) recording that home and your configured choices.
    The destination directory, and this checkout's own path, may contain spaces; both are resolved exactly, never derived by splitting on whitespace.
-3. Re-run the same command any time to reinstall in place, for example after editing `config/launcher.conf` or moving the destination.
-4. First use: macOS Gatekeeper may ask to confirm running a downloaded/unsigned script; approve once via System Settings > Privacy & Security if it's blocked outright.
-5. On the very first real `pi` launch in this checkout, Pi prompts to trust the project so `.pi/extensions/*.ts` auto-load; grant that once per clone (see the README).
+4. Re-run the same command any time to reinstall in place, including after editing `config/launcher.conf`, moving this checkout, or changing the destination.
+5. First use: macOS Gatekeeper may ask to confirm running a downloaded/unsigned script; approve once via System Settings > Privacy & Security if it's blocked outright.
+6. On the very first real `pi` launch in this checkout, Pi prompts to trust the project so `.pi/extensions/*.ts` auto-load; grant that once per clone (see the README).
 
 ## Usage
 
 - Double-click `fm-launcher.command` (or run it from Terminal): start-or-attach for real.
-- `./fm-launcher.command --check` - run every dependency/config/model/quota/ambiguity check with zero mutation.
-- `./fm-launcher.command --dry-run` - print the exact one-line action it would take, zero mutation.
+- `./fm-launcher.command --check` - run the dependency/config/model/quota/ambiguity preflight without changing Herdr or primary state; launcher bookkeeping such as its state directory and bounded log may still be updated.
+- `./fm-launcher.command --dry-run` - print a redacted summary and intended action without changing Herdr or primary state; the same launcher bookkeeping may still be updated.
 - `./fm-launcher.command --adopt-current` - first-install only, run FROM INSIDE an already-live Herdr Pi primary pane to record its identity without renaming, closing, launching, or spending quota.
 - `./fm-launcher.command --help` - full flag reference.
 
@@ -31,7 +32,7 @@ It is a convenience wrapper around already-supported Herdr and Pi entry points, 
 - **The quota gate requires fresh first-party OAuth** for the configured provider (never API-key routing) and refuses below the configured reserve percent, never falling back to paid or extra usage.
 - **Any ambiguity - a duplicate label, an unreadable pane, a mismatched identity, a foreign live session-lock owner - is always a refusal**, never a guess; the launcher prints the exact Herdr session to inspect by hand.
 - **Concurrent launches serialize** through a single-flight, home-scoped lock distinct from Firstmate's own session lock (which the launcher only ever reads, never writes or clears).
-- **Logging is bounded and redacted**: `state/.fm-launcher.log`, mode `0600`, trimmed once it exceeds roughly 200KB; every line is a fixed human-authored string plus small identifiers, never raw quota JSON, environment, credentials, or prompts.
+- **Logging is bounded and redacted**: `state/.fm-launcher.log`, mode `0600`, trimmed once it exceeds roughly 200KB; diagnostic messages may include configured paths, labels, model names, and small identifiers, but never raw quota JSON, environment dumps, credentials, or prompts.
 
 ## Config reference
 
@@ -41,5 +42,5 @@ It is a convenience wrapper around already-supported Herdr and Pi entry points, 
 ## Rollback / removal
 
 Delete the installed `fm-launcher.command` and `fm-launcher.conf` from the destination directory to remove the artifact entirely.
-It owns no other state outside `state/.fm-launcher.log`, `state/.fm-launcher.lock`, and `state/.fm-launcher-primary-identity` in the Firstmate home, all safe to delete any time no launch is in progress.
+Its launcher-specific bookkeeping is limited to `state/.fm-launcher.log`, `state/.fm-launcher.lock`, and `state/.fm-launcher-primary-identity` in the Firstmate home; do not remove the lock during a launch, and removing a live primary's identity journal requires first-install adoption before a later installed launcher can manage that primary again.
 Removing it does not affect any existing Herdr workspace/tab/pane, any Firstmate task, or the primary itself - it only stops offering the one-click entry point.

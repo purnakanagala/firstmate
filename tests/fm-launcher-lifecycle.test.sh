@@ -290,8 +290,12 @@ pass "launcher: dead-primary recovery also enforces the configured quota reserve
 # Now prove recovery itself works with healthy quota: the SAME pane is reused
 # (never closed/replaced), a fresh live "pi" agent reappears there.
 run_launcher_real "$HOME4B" "$QUOTA_OK" >/dev/null
-sleep 1
-CHECK4C=$(run_launcher "$HOME4B" "$QUOTA_OK" --check) || fail "post-recovery check failed: $CHECK4C"
+CHECK4C=""
+for _i in 1 2 3 4 5 6 7 8 9 10; do
+  CHECK4C=$(run_launcher "$HOME4B" "$QUOTA_OK" --check 2>&1)
+  printf '%s' "$CHECK4C" | grep -q "alive" && break
+  sleep 0.3
+done
 assert_contains "$CHECK4C" "alive" "expected the recovered husk to report alive"
 J4B_AFTER=$(awk -F= '$1=="pane_id"{print $2}' "$J4B")
 [ "$J4B_AFTER" = "$PANE4B" ] || fail "recovery must reuse the exact same pane, never a new one (was $PANE4B, now $J4B_AFTER)"

@@ -9,7 +9,8 @@
 # per-install config file (default `fm-launcher.conf`, same directory) that
 # carries every install-specific value: the Firstmate home, the pinned
 # model/reasoning, the Pi executable, and the quota provider/reserve. See
-# docs/launcher.md for the config schema, defaults, and setup.
+# docs/examples/launcher.conf for the config schema and defaults, and see
+# docs/launcher.md for setup and safety boundaries.
 #
 # This is a personal convenience artifact, not a control plane. It never
 # stops/deletes/restarts/updates the Herdr server/session, never force-kills
@@ -17,8 +18,9 @@
 # it stops with a diagnostic and points at Firstmate's normal recovery.
 #
 # Modes:
-#   --check          dependency/config/model/quota/ambiguity checks only, no mutation
-#   --dry-run        print the redacted intended action only, no mutation
+#   --check          preflight without changing Herdr or primary state
+#   --dry-run        print the redacted intended action without changing Herdr
+#                    or primary state
 #   --adopt-current  first-install only: record the identity of an already-live
 #                     primary pane this is run from; never starts/checks quota
 #   (default)        start-or-attach the primary and attach the Herdr client
@@ -487,15 +489,15 @@ pane_holds_pid() {  # <pane_id> <pid>
 unjournaled_label_collision() {
   local workspaces workspace_ids workspace_count workspace_id tabs tab_count
   workspaces=$(hcli workspace list 2>/dev/null) || return 2
-  workspace_ids=$(printf '%s' "$workspaces" | jq -ce --arg label "$FM_LAUNCHER_WORKSPACE_LABEL" \
-    'select((.result.workspaces | type) == "array") | [.result.workspaces[] | select(.label == $label) | .workspace_id]' 2>/dev/null) || return 2
+  workspace_ids=$(printf '%s' "$workspaces" | jq -ce --arg wanted_label "$FM_LAUNCHER_WORKSPACE_LABEL" \
+    'select((.result.workspaces | type) == "array") | [.result.workspaces[] | select(.label == $wanted_label) | .workspace_id]' 2>/dev/null) || return 2
   workspace_count=$(printf '%s' "$workspace_ids" | jq -er 'length' 2>/dev/null) || return 2
   [ "$workspace_count" -le 1 ] || return 1
   [ "$workspace_count" -eq 1 ] || return 0
   workspace_id=$(printf '%s' "$workspace_ids" | jq -er '.[0]' 2>/dev/null) || return 2
   tabs=$(hcli tab list --workspace "$workspace_id" 2>/dev/null) || return 2
-  tab_count=$(printf '%s' "$tabs" | jq -er --arg label "$FM_LAUNCHER_TAB_LABEL" \
-    'select((.result.tabs | type) == "array") | [.result.tabs[] | select(.label == $label)] | length' 2>/dev/null) || return 2
+  tab_count=$(printf '%s' "$tabs" | jq -er --arg wanted_label "$FM_LAUNCHER_TAB_LABEL" \
+    'select((.result.tabs | type) == "array") | [.result.tabs[] | select(.label == $wanted_label)] | length' 2>/dev/null) || return 2
   [ "$tab_count" -eq 0 ] || return 1
 }
 

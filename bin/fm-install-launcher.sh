@@ -8,8 +8,8 @@
 #
 # Reads captain-specific choices (model, reasoning, Pi executable, quota
 # provider, optional reserve percent) from the local, gitignored
-# config/launcher.conf (schema and defaults: docs/launcher.md). Refuses
-# rather than picking any of those choices on the captain's behalf.
+# config/launcher.conf (schema and defaults: docs/examples/launcher.conf).
+# Refuses rather than picking any of those choices on the captain's behalf.
 #
 # Resolves this exact checkout's own root as the installed launcher's
 # Firstmate home - never relative to the destination directory, so the
