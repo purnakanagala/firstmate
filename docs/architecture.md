@@ -132,7 +132,8 @@ Ship briefs also tell the crewmate to verify `pwd -P` and `git rev-parse --show-
 ## Fresh-session objective rollover
 
 `bin/fm-rollover.sh` is the single owner of `fm-rollover-capsule.v1` and the in-place ordinary-task rollover transaction.
-The first supported path is an ordinary Pi or pi-signed ship on tmux because that combination can prove a live recorded owner, cleanly exit to the same shell endpoint, preserve the exact isolated worktree, and publish a new process-bound generation marker from a Pi extension.
+The first supported path is an ordinary plain Pi ship on tmux because that combination can prove a live recorded owner, cleanly exit to the same shell endpoint, preserve the exact isolated worktree, and publish a new process-bound generation marker from a Pi extension.
+The pi-signed rollover path remains unsupported and unverified.
 Every scout, secondmate, other harness, and other backend is rejected before the old worker exits.
 The capsule is capped at 8 KiB and contains only the current objective, accepted decisions, fixed immutable constraints, branch/revision and artifact pointers, validation/PR pointers, and explicit superseded-instruction markers.
 It never copies historical instructions, reports, chats, logs, private prompts, source, or secret-shaped input.

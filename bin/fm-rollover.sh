@@ -7,7 +7,7 @@
 #        fm-rollover.sh --validate <capsule.json>
 #
 # This script is the authoritative owner of fm-rollover-capsule.v1 and rollover
-# mechanics. It supports only kind=ship, harness=pi|pi-signed, backend=tmux.
+# mechanics. It supports only kind=ship, harness=pi, backend=tmux.
 # Every other task kind, harness, or backend is explicitly refused until its
 # adapter can prove fresh-session identity while retaining the exact endpoint and
 # worktree. Repeating an already-live identical rollover is an idempotent no-op.
@@ -92,7 +92,7 @@ harness_command_matches() {  # <target> <harness>
   command=$(fm_backend_tmux_current_command "$target") || return 1
   command=${command#-}
   case "$harness:$command" in
-    pi:pi|pi:pi-launcher|pi:Pi|pi-signed:pi-signed|pi-signed:pi-launcher|pi-signed:Pi) return 0 ;;
+    pi:pi|pi:pi-launcher|pi:Pi) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -192,7 +192,7 @@ META="$STATE/$ID.meta"
 [ -f "$META" ] && [ ! -L "$META" ] || refuse "task ownership metadata is missing or unsafe"
 [ "$(meta_get "$META" kind)" = ship ] || refuse "rollover supports ordinary ship tasks only; scouts and secondmates are refused"
 HARNESS=$(meta_get "$META" harness)
-case "$HARNESS" in pi|pi-signed) ;; *) refuse "rollover is unsupported for harness '$HARNESS'; only pi and pi-signed are verified" ;; esac
+case "$HARNESS" in pi) ;; *) refuse "rollover is unsupported for harness '$HARNESS'; only plain pi is supported, and pi-signed remains unsupported and unverified" ;; esac
 BACKEND=$(fm_backend_of_meta "$META")
 [ "$BACKEND" = tmux ] || refuse "rollover is unsupported for backend '$BACKEND'; only tmux has fresh-session proof"
 fm_backend_source "$BACKEND" || refuse "tmux backend adapter could not be loaded"
@@ -242,8 +242,10 @@ if [ -e "$CAPSULE" ] || [ -L "$CAPSULE" ]; then
   CURRENT_SHA=$(sha256_file "$CAPSULE")
   [ "$META_GEN" = "$PREV" ] && [ "$META_CAPSULE" = "$CAPSULE" ] \
     || refuse "existing rollover capsule and metadata generation do not match"
-  [[ "$LIVE" = "$PREV"$'\t'"$CURRENT_SHA"$'\t'* ]] && live_process_matches "$LIVE" "$TARGET" "$HARNESS" \
-    || refuse "existing rollover generation has no matching live process proof"
+  if [[ "$LIVE" != "$PREV"$'\t'"$CURRENT_SHA"$'\t'* ]] \
+     || ! live_process_matches "$LIVE" "$TARGET" "$HARNESS"; then
+    refuse "existing rollover generation has no matching live process proof"
+  fi
   [ "$FINALIZED" = "$LIVE" ] || refuse "existing rollover generation is not operator-finalized"
 else
   [ -z "$META_GEN" ] && [ -z "$META_CAPSULE" ] && [ -z "$LIVE" ] && [ -z "$FINALIZED" ] && [ ! -e "$STATE/$ID.rollover-ack" ] \

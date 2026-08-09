@@ -119,8 +119,7 @@ printf '%s\t%s\t4242\t%s\n' "$FM_ROLLOVER_GENERATION" "$FM_ROLLOVER_CAPSULE_SHA"
 printf '%s\n' "$FM_PI_HARNESS" >> "$root/harness-execs"
 SH
 cp "$FAKEBIN/pi-double" "$FAKEBIN/pi"
-cp "$FAKEBIN/pi-double" "$FAKEBIN/pi-signed"
-chmod +x "$FAKEBIN/pi" "$FAKEBIN/pi-signed"
+chmod +x "$FAKEBIN/pi"
 
 run_rollover() {
   PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" \
@@ -177,20 +176,7 @@ OUT=$(run_rollover)
 printf '%s' "$OUT" | grep -F 'rollover unchanged' >/dev/null || fail "identical retry was not idempotent: $OUT"
 [ "$(grep -c '^launch$' "$TMP/launches")" = 1 ] || fail "idempotent retry launched another session"
 [ "$(jq -r '.generation' "$CAPSULE")" = 1 ] || fail "idempotent retry advanced generation"
-sed 's/^harness=pi$/harness=pi-signed/' "$HOME1/state/task.meta" > "$TMP/meta.signed"
-mv "$TMP/meta.signed" "$HOME1/state/task.meta"
-printf 'pi-signed\n' > "$TMP/agent"
-if run_rollover >/dev/null 2>&1; then fail "relabeling a live Pi generation as pi-signed was accepted"; fi
-awk '!/^rollover_generation=/ && !/^rollover_capsule=/' "$HOME1/state/task.meta" > "$TMP/meta.signed.clean"
-mv "$TMP/meta.signed.clean" "$HOME1/state/task.meta"
-rm -f "$CAPSULE" "$HOME1/state/task.rollover-live" "$HOME1/state/task.rollover-ack" "$HOME1/state/task.rollover-finalized"
-OUT=$(run_rollover)
-printf '%s' "$OUT" | grep -F 'fresh-session=proved worktree=preserved' >/dev/null \
-  || fail "fresh pi-signed rollover did not prove ownership: $OUT"
-[ "$(grep -c '^launch$' "$TMP/launches")" = 2 ] || fail "fresh pi-signed rollover did not launch exactly once"
-[ "$(grep -c '^pi-signed$' "$TMP/harness-execs")" = 1 ] || fail "provider-free pi-signed executable double was not invoked"
-[ "$(awk -F '\t' '{print $4}' "$HOME1/state/task.rollover-live")" = pi-signed ] || fail "pi-signed live proof lost its launch identity"
-pass "fresh Pi and pi-signed launches, process-bound identity, bounded capsule, preservation, and idempotency"
+pass "fresh Pi launch, process-bound identity, bounded capsule, preservation, and idempotency"
 
 cp "$CAPSULE" "$TMP/tampered.json"
 jq '.objective_sha256 = ("0" * 64)' "$TMP/tampered.json" > "$TMP/tampered.next" && mv "$TMP/tampered.next" "$TMP/tampered.json"
@@ -216,7 +202,7 @@ if PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" FM_HOME="$HOM
   fail "stale capsule generation advanced instead of refusing"
 fi
 cp "$TMP/generation.save" "$CAPSULE"
-[ "$(grep -c '^launch$' "$TMP/launches")" = 2 ] || fail "stale generation mismatch launched a worker"
+[ "$(grep -c '^launch$' "$TMP/launches")" = 1 ] || fail "stale generation mismatch launched a worker"
 pass "stale capsule, metadata, and live generations stop before rollover"
 
 for secret in 'password: hunter2' 'Authorization: Bearer abcdefghijkl' 'https://user:pass@example.test/path' 'sk-abcdefghijklmnop' 'ghp_abcdefghijklmnop' 'xoxb-abcdefghijklmnop' 'glpat-abcdefghijklmnop' 'AKIAIOSFODNN7EXAMPLE' 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJl' 'abcdefghijklmnopqrstuvwx'; do
@@ -250,13 +236,13 @@ refusal_case() {
 }
 refusal_case scout 'kind=scout'
 refusal_case secondmate 'kind=secondmate'
-for unsupported_harness in claude codex opencode grok kimi; do
+for unsupported_harness in pi-signed claude codex opencode grok kimi; do
   refusal_case "$unsupported_harness" "harness=$unsupported_harness"
 done
 for unsupported_backend in herdr zellij orca cmux; do
   refusal_case "$unsupported_backend" "backend=$unsupported_backend"
 done
-[ "$(grep -c '^launch$' "$TMP/launches")" = 2 ] || fail "unsupported refusal launched a session"
+[ "$(grep -c '^launch$' "$TMP/launches")" = 1 ] || fail "unsupported refusal launched a session"
 pass "scout, secondmate, unsupported harness, and unsupported backend boundaries"
 
 if PATH="$FAKEBIN:$PATH" FM_FAKE_TMUX_ROOT="$TMP" FM_FAKE_WT="$WT" FM_HOME="$HOME2" FM_ROOT_OVERRIDE="$ROOT" \

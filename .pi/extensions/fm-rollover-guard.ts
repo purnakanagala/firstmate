@@ -27,7 +27,7 @@ function sha256(bytes: string): string {
 }
 
 function capsule(): { value: Capsule; bytes: string } {
-  if (harness !== "pi" && harness !== "pi-signed") throw new Error("rollover harness identity is invalid");
+  if (harness !== "pi") throw new Error("rollover harness identity is invalid");
   const bytes = readFileSync(capsulePath, "utf8");
   if (sha256(bytes) !== expectedCapsuleSha) throw new Error("capsule bytes do not match the launch-bound digest");
   const value = JSON.parse(bytes) as Capsule;
