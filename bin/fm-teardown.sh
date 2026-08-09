@@ -102,6 +102,8 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-lock-lib.sh
 . "$SCRIPT_DIR/fm-lock-lib.sh"
+# shellcheck source=bin/fm-wake-lib.sh
+. "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-gate-refuse-lib.sh
 . "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
@@ -117,6 +119,48 @@ FORCE=${2:-}
 fm_refuse_if_gate_agent
 FM_LOCK_LOG_PREFIX=teardown
 "$FM_ROOT/bin/fm-guard.sh" || true
+
+TEARDOWN_LIFECYCLE_LOCKS=()
+teardown_locks_release() {
+  local status=$? index
+  for ((index=${#TEARDOWN_LIFECYCLE_LOCKS[@]} - 1; index >= 0; index--)); do
+    fm_lock_release "${TEARDOWN_LIFECYCLE_LOCKS[$index]}" || true
+  done
+  return "$status"
+}
+trap teardown_locks_release EXIT
+
+teardown_lock_acquire() {
+  local lock=$1 refusal=$2 held
+  for held in "${TEARDOWN_LIFECYCLE_LOCKS[@]+"${TEARDOWN_LIFECYCLE_LOCKS[@]}"}"; do
+    [ "$held" = "$lock" ] && return 0
+  done
+  if ! fm_lock_try_acquire "$lock"; then
+    echo "$refusal" >&2
+    return 1
+  fi
+  TEARDOWN_LIFECYCLE_LOCKS+=("$lock")
+}
+
+teardown_task_lock_acquire() {
+  local state_dir=$1 id=$2 lock
+  lock="$state_dir/.spawn-$id.lock"
+  teardown_lock_acquire "$lock" \
+    "REFUSED: task $id is owned by another spawn, rollover, or teardown; preserving task state."
+}
+
+teardown_home_lifecycle_lock_acquire() {
+  local state_dir=$1 lock
+  # A valid idle secondmate home may not have created state/ yet. Materialize the
+  # lock namespace inside that already-validated home before taking ownership;
+  # otherwise the generic lock helper cannot publish an owner beneath it.
+  mkdir -p "$state_dir" || return 1
+  lock="$state_dir/.spawn-home.lock"
+  teardown_lock_acquire "$lock" \
+    "REFUSED: firstmate home lifecycle is owned by another spawn or teardown; preserving home state."
+}
+
+teardown_task_lock_acquire "$STATE" "$ID" || exit 1
 
 META="$STATE/$ID.meta"
 [ -f "$META" ] || { echo "error: no meta for task $ID at $META" >&2; exit 1; }
@@ -202,6 +246,45 @@ remove_kimi_turnend_auth() {
   case "$token" in ''|*[!A-Za-z0-9._-]*) return 0 ;; esac
   hooks_dir="$HOME/.kimi-code/fm-turn-end.d"
   rm -f "$hooks_dir/$token"
+}
+
+validate_rollover_cleanup() {
+  local state_dir=$1 data_dir=$2 id=$3 artifact state_device task_data task_device has_state_artifact=0
+  for artifact in "$state_dir/$id.rollover-live" "$state_dir/$id.rollover-ack" \
+    "$state_dir/$id.rollover-finalized"; do
+    [ -e "$artifact" ] || [ -L "$artifact" ] || continue
+    has_state_artifact=1
+  done
+  if [ "$has_state_artifact" -eq 1 ]; then
+    state_device=$(fm_pr_file_device "$state_dir") || return 1
+  fi
+  for artifact in "$state_dir/$id.rollover-live" "$state_dir/$id.rollover-ack" \
+    "$state_dir/$id.rollover-finalized"; do
+    [ -e "$artifact" ] || [ -L "$artifact" ] || continue
+    if ! fm_pr_private_file_valid "$artifact" 600 "$state_device"; then
+      echo "REFUSED: unsafe task rollover artifact; preserving task state." >&2
+      return 1
+    fi
+  done
+  task_data="$data_dir/$id"
+  artifact="$task_data/rollover-capsule.json"
+  [ -e "$artifact" ] || [ -L "$artifact" ] || return 0
+  if [ ! -d "$task_data" ] || [ -L "$task_data" ]; then
+    echo "REFUSED: unsafe task rollover data directory; preserving task state." >&2
+    return 1
+  fi
+  task_device=$(fm_pr_file_device "$task_data") || return 1
+  if ! fm_pr_private_file_valid "$artifact" 600 "$task_device"; then
+    echo "REFUSED: unsafe task rollover capsule; preserving task state." >&2
+    return 1
+  fi
+}
+
+remove_rollover_artifacts() {
+  local state_dir=$1 data_dir=$2 id=$3
+  validate_rollover_cleanup "$state_dir" "$data_dir" "$id" || return 1
+  rm -f "$state_dir/$id.rollover-live" "$state_dir/$id.rollover-ack" \
+    "$state_dir/$id.rollover-finalized" "$data_dir/$id/rollover-capsule.json"
 }
 
 validate_pr_poll_cleanup() {
@@ -941,10 +1024,13 @@ validate_firstmate_home_children_removal() {
   local home=$1 sub_state child_meta child_id child_wt child_proj child_kind child_home child_backend child_orca_worktree_id
   sub_state="$home/state"
   [ -d "$sub_state" ] || return 0
+  teardown_home_lifecycle_lock_acquire "$sub_state" || return 1
   for child_meta in "$sub_state"/*.meta; do
     [ -e "$child_meta" ] || continue
     child_id=$(basename "$child_meta" .meta)
+    teardown_task_lock_acquire "$sub_state" "$child_id" || return 1
     validate_pr_poll_cleanup "$sub_state" "$child_id" || return 1
+    validate_rollover_cleanup "$sub_state" "$home/data" "$child_id" || return 1
     child_wt=$(meta_value "$child_meta" worktree)
     child_kind=$(meta_value "$child_meta" kind)
     [ -n "$child_kind" ] || child_kind=ship
@@ -972,9 +1058,11 @@ cleanup_firstmate_home_children() {
   local home=$1 sub_state child_meta child_id child_t child_wt child_proj child_kind child_home child_backend child_orca_worktree_id child_return_rc
   sub_state="$home/state"
   [ -d "$sub_state" ] || return 0
+  teardown_home_lifecycle_lock_acquire "$sub_state" || return 1
   for child_meta in "$sub_state"/*.meta; do
     [ -e "$child_meta" ] || continue
     child_id=$(basename "$child_meta" .meta)
+    teardown_task_lock_acquire "$sub_state" "$child_id" || return 1
     child_wt=$(meta_value "$child_meta" worktree)
     child_proj=$(meta_value "$child_meta" project)
     child_kind=$(meta_value "$child_meta" kind)
@@ -1035,6 +1123,7 @@ cleanup_firstmate_home_children() {
     remove_grok_turnend_auth "$sub_state" "$child_id"
     remove_kimi_turnend_auth "$sub_state" "$child_id"
     remove_pr_poll_artifacts "$sub_state" "$child_id" || return 1
+    remove_rollover_artifacts "$sub_state" "$home/data" "$child_id" || return 1
     rm -f "$sub_state/$child_id.status" "$sub_state/$child_id.turn-ended" \
       "$sub_state/$child_id.meta" "$sub_state/$child_id.pi-ext.ts" \
       "$sub_state/$child_id.grok-turnend-token" "$sub_state/$child_id.kimi-turnend-token"
@@ -1050,9 +1139,12 @@ remove_secondmate_registry_entry() {
 }
 
 validate_pr_poll_cleanup "$STATE" "$ID" || exit 1
+validate_rollover_cleanup "$STATE" "$DATA" "$ID" || exit 1
 
 if [ "$KIND" = secondmate ]; then
   [ -n "$HOME_PATH" ] || HOME_PATH=$WT
+  validate_firstmate_home_for_removal "$HOME_PATH" "secondmate home" "$ID" >/dev/null || exit 1
+  teardown_home_lifecycle_lock_acquire "$HOME_PATH/state" || exit 1
   validate_firstmate_home_for_removal "$HOME_PATH" "secondmate home" "$ID" >/dev/null || exit 1
   if [ "$FORCE" = "--force" ]; then
     validate_firstmate_home_children_removal "$HOME_PATH" || exit 1
@@ -1178,8 +1270,6 @@ if [ "$BACKEND" = herdr ] \
 fi
 
 if [ "$HERDR_PRESENTATION_RETIRE_CANDIDATE" = 1 ]; then
-  # shellcheck source=bin/fm-wake-lib.sh
-  . "$SCRIPT_DIR/fm-wake-lib.sh"
   HERDR_PRESENTATION_FOCUS_LOCK=
   HERDR_PRESENTATION_FOCUS_LOCK_HELD=0
   HERDR_PRESENTATION_FOCUS_LOCK_ATTEMPT=0
@@ -1226,6 +1316,7 @@ fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.
 [ -n "$TASK_TMP" ] && rm -rf "$TASK_TMP"
 remove_pr_poll_artifacts "$STATE" "$ID" || exit 1
+remove_rollover_artifacts "$STATE" "$DATA" "$ID" || exit 1
 rm -f "$STATE/$ID.status" "$STATE/$ID.turn-ended" "$STATE/$ID.meta" \
   "$STATE/$ID.pi-ext.ts" "$STATE/$ID.grok-turnend-token" \
   "$STATE/$ID.kimi-turnend-token"

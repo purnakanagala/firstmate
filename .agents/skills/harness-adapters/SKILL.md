@@ -1,6 +1,6 @@
 ---
 name: harness-adapters
-description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, and kimi.
+description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, rolling over an ordinary ship session, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, and kimi.
 user-invocable: false
 metadata:
   internal: true
@@ -47,7 +47,22 @@ A captain override always beats detection.
 When verifying a new adapter, record its env marker and command name in `bin/fm-harness.sh`.
 
 For stuck recovery, the target window's harness is recorded as `harness=` in `state/<id>.meta`.
-Use that value for interrupt, exit, resume, and skill-invocation facts.
+Use that value for interrupt, exit, resume, rollover, and skill-invocation facts.
+
+## Fresh-session ordinary-task rollover
+
+Load this skill before invoking `bin/fm-rollover.sh`.
+The script currently supports only an ordinary `kind=ship` worker recorded as `pi` or `pi-signed` on the tmux backend.
+Both identities use the same guarded Pi surface while preserving the exact recorded executable and launch-bound `FM_PI_HARNESS` identity.
+It exits the current Pi session cleanly, retains the exact endpoint and isolated worktree, launches a new guarded Pi process without an objective turn, finalizes the generation only after preservation and ownership checks, then submits the capsule prompt through the verified composer path and requires the fresh worker to call `fm_rollover_ack` before any other tool.
+The existing task Pi turn-end extension remains loaded, and no-mistakes ownership and response mechanics do not change.
+A byte-bounded capsule stores pointers rather than brief, report, chat, log, prompt, or source content.
+Repeated invocation with the same capsule semantics and matching live fresh-session proof is a no-op.
+
+The verified harness review is explicit: Claude, Codex, OpenCode, Grok, and Kimi are rejected because none currently has the Pi rollover guard and generation acknowledgment surface; scouts and secondmates are rejected because their lifecycle owners differ from ordinary ships.
+The verified backend review is also explicit: Herdr, Zellij, Orca, and cmux are rejected because current adapters do not jointly prove an in-place fresh agent identity, unchanged endpoint ownership, and preserved worktree bytes for this operation.
+Do not emulate rollover through `fm-send`, a resume command, a replacement spawn, or manual endpoint lifecycle commands.
+If any recorded identity, endpoint, agent liveness, worktree root, generation, capsule digest, or post-launch worktree hash is ambiguous, preserve the existing copy and escalate instead of retrying on another runtime.
 
 ## Primary turn-end guard
 

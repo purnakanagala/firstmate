@@ -141,6 +141,8 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
 . "$SCRIPT_DIR/fm-pr-lib.sh"
+# shellcheck source=bin/fm-harness-launch-lib.sh
+. "$SCRIPT_DIR/fm-harness-launch-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
 # a direct report (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -233,6 +235,8 @@ HERDR_PRESENTATION_ORDER_LOCK=
 HERDR_PRESENTATION_ORDER_LOCK_HELD=0
 SPAWN_TASK_LOCK=
 SPAWN_TASK_LOCK_HELD=0
+SPAWN_HOME_LIFECYCLE_LOCK=
+SPAWN_HOME_LIFECYCLE_LOCK_HELD=0
 CONFIG_INHERIT_LOCK=
 CONFIG_INHERIT_LOCK_HELD=0
 
@@ -304,6 +308,10 @@ spawn_abort_cleanup() {
   if [ "$SPAWN_TASK_LOCK_HELD" = 1 ]; then
     SPAWN_TASK_LOCK_HELD=0
     fm_lock_release "$SPAWN_TASK_LOCK" || true
+  fi
+  if [ "$SPAWN_HOME_LIFECYCLE_LOCK_HELD" = 1 ]; then
+    SPAWN_HOME_LIFECYCLE_LOCK_HELD=0
+    fm_lock_release "$SPAWN_HOME_LIFECYCLE_LOCK" || true
   fi
   if [ "$CONFIG_INHERIT_LOCK_HELD" = 1 ]; then
     CONFIG_INHERIT_LOCK_HELD=0
@@ -377,6 +385,17 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
 fi
 ID=${POS[0]}
 fm_task_id_creation_valid "$ID" || { echo "error: invalid task id" >&2; exit 2; }
+# Only a spawn running inside a secondmate home can race that home's parent-owned
+# teardown. Primary-home task spawns remain independently serialized by task id,
+# and Herdr presentation mutations retain their session-wide ordering lock.
+if [ -f "$FM_HOME/$SUB_HOME_MARKER" ]; then
+  SPAWN_HOME_LIFECYCLE_LOCK="$STATE/.spawn-home.lock"
+  if ! fm_lock_try_acquire "$SPAWN_HOME_LIFECYCLE_LOCK"; then
+    echo "error: firstmate home lifecycle is owned by another spawn or teardown" >&2
+    exit 1
+  fi
+  SPAWN_HOME_LIFECYCLE_LOCK_HELD=1
+fi
 SPAWN_TASK_LOCK="$STATE/.spawn-$ID.lock"
 if ! fm_lock_try_acquire "$SPAWN_TASK_LOCK"; then
   echo "error: another spawn is already creating task $ID" >&2
@@ -545,9 +564,7 @@ secondmate_registry_value() {
 }
 
 shell_quote() {
-  printf "'"
-  printf '%s' "$1" | sed "s/'/'\\\\''/g"
-  printf "'"
+  fm_shell_quote "$1"
 }
 
 resolve_kimi_binary() {
@@ -572,57 +589,6 @@ resolve_kimi_binary() {
   fi
   echo "error: kimi executable not found; searched PATH for 'kimi' and fallback '$fallback'" >&2
   return 1
-}
-
-model_flag_for_harness() {
-  local harness=$1 model=$2
-  [ -n "$model" ] && [ "$model" != default ] || return 0
-  case "$harness" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi)
-      printf -- '--model %s ' "$(shell_quote "$model")"
-      ;;
-  esac
-}
-
-effort_flag_for_harness() {
-  local harness=$1 effort=$2
-  [ -n "$effort" ] && [ "$effort" != default ] || return 0
-  case "$harness" in
-    claude)
-      case "$effort" in
-        low|medium|high|xhigh|max) printf -- '--effort %s ' "$(shell_quote "$effort")" ;;
-      esac
-      ;;
-    codex)
-      # The installed codex config schema uses model_reasoning_effort, and the
-      # bundled model catalog advertises low|medium|high|xhigh. Omit max rather
-      # than passing an unsupported value.
-      case "$effort" in
-        low|medium|high|xhigh) printf -- '-c %s ' "$(shell_quote "model_reasoning_effort=\"$effort\"")" ;;
-      esac
-      ;;
-    grok)
-      # grok exposes both --effort and --reasoning-effort; firstmate's profile
-      # axis is the reasoning knob. As of grok 0.2.99, --reasoning-effort accepts
-      # only low|medium|high and rejects both xhigh and max, so omit those rather
-      # than passing a known-bad value.
-      case "$effort" in
-        low|medium|high) printf -- '--reasoning-effort %s ' "$(shell_quote "$effort")" ;;
-      esac
-      ;;
-    pi|pi-signed)
-      # Pi 0.80.6 accepts the full shared effort vocabulary, including max, through
-      # its --thinking flag.
-      case "$effort" in
-        low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
-      esac
-      ;;
-    # opencode's interactive `opencode --prompt` launch has a verified --model
-    # flag but no verified effort flag. Its `opencode run --variant` flag belongs
-    # to a different, non-interactive launch mode, so fm-spawn does not pass it.
-    # kimi likewise has no reasoning-effort flag; the requested axis stays in
-    # task metadata but never reaches the launch command.
-  esac
 }
 
 case "$LAUNCH" in

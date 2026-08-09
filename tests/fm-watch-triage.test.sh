@@ -433,6 +433,80 @@ test_terminal_stale_surfaced() {
 # immediately surfacing a crew that is actively validating. crew_is_provably_working
 # must get a chance to override a captain-relevant-but-stale status line, exactly
 # as it already does for a plain non-terminal one.
+test_quiet_terminal_hash_churn_absorbed_then_changed_status_surfaces() {
+  local dir state fakebin out drain_out capture_file window key sig pid
+  dir=$(make_case quiet-terminal-churn); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
+  window="test:fm-quiet-terminal"
+  printf 'idle terminal frame two\n' > "$capture_file"
+  printf 'window=%s\nkind=ship\nharness=pi\n' "$window" > "$state/quiet-terminal.meta"
+  printf 'needs-decision: choose the approved API shape\n' > "$state/quiet-terminal.status"
+  sig=$(seen_sig "$state/quiet-terminal.status")
+  printf '%s' "$sig" > "$state/.seen-quiet-terminal_status"
+  printf 'needs-decision: choose the approved API shape' > "$state/.hb-surfaced-quiet-terminal"
+  key=$(printf '%s' "$window" | tr ':/.' '___')
+  printf 'obsolete-pane-hash' > "$state/.hash-$key"
+  printf '1\n' > "$state/.count-$key"
+
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_FAKE_TMUX_CURRENT_COMMAND=pi FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  if ! wait_live "$pid" 35; then
+    reap "$pid"; fail "unchanged delivered decision hash churn woke the supervisor: $(cat "$out")"
+  fi
+  [ -s "$state/.quiet-stale-suppressed-$key" ] || { reap "$pid"; fail "quiet stale suppression counter was not recorded"; }
+  [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "quiet hash churn enqueued an event"; }
+
+  printf '%s\n' $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+  wait_for_exit "$pid" 40 || { reap "$pid"; fail "unchanged delivered decision hid a genuine wedge"; }
+  grep -F "possible wedge" "$out" >/dev/null || fail "quiet-status wedge escalation omitted its reason"
+
+  : > "$out"
+  printf 'idle terminal frame three\n' > "$capture_file"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_FAKE_TMUX_CURRENT_COMMAND=pi FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+
+  printf 'blocked: credential login is now required\n' >> "$state/quiet-terminal.status"
+  wait_for_exit "$pid" 40 || { reap "$pid"; fail "changed actionable status did not wake after quiet suppression"; }
+  grep -F "signal: $state/quiet-terminal.status" "$out" >/dev/null \
+    || fail "changed actionable status did not print its signal"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null || fail "drain after changed quiet status failed"
+  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F 'quiet-terminal.status' >/dev/null \
+    || fail "changed actionable status was lost from the durable queue"
+  pass "unchanged delivered decision hash churn is absorbed, while changed actionable status wakes without loss"
+}
+
+test_quiet_terminal_does_not_hide_stopped_or_x_tasks() {
+  local variant dir state fakebin out capture_file window key sig pid command extra
+  for variant in stopped x-linked; do
+    dir=$(make_case "quiet-$variant"); state="$dir/state"; fakebin="$dir/fakebin"
+    out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-quiet-$variant"
+    printf 'idle terminal churn\n' > "$capture_file"
+    command=pi; extra=
+    [ "$variant" = stopped ] && command=zsh
+    [ "$variant" = x-linked ] && extra='x_request=req-1'
+    printf 'window=%s\nkind=ship\nharness=pi\n%s\n' "$window" "$extra" > "$state/quiet-$variant.meta"
+    printf 'done: PR https://example.test/pull/9 checks green\n' > "$state/quiet-$variant.status"
+    sig=$(seen_sig "$state/quiet-$variant.status")
+    printf '%s' "$sig" > "$state/.seen-quiet-${variant}_status"
+    printf 'done: PR https://example.test/pull/9 checks green' > "$state/.hb-surfaced-quiet-$variant"
+    key=$(printf '%s' "$window" | tr ':/.' '___')
+    printf 'prior-hash' > "$state/.hash-$key"
+    printf '1\n' > "$state/.count-$key"
+    PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+      FM_FAKE_TMUX_CURRENT_COMMAND="$command" FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 \
+      FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+    pid=$!
+    wait_for_exit "$pid" 40 || { reap "$pid"; fail "$variant quiet status was incorrectly suppressed"; }
+    grep -Fx "stale: $window" "$out" >/dev/null || fail "$variant task did not surface its stale event"
+    [ ! -e "$state/.quiet-stale-suppressed-$key" ] || fail "$variant task incremented the quiet suppression counter"
+  done
+  pass "quiet-status dedupe never hides a stopped worker or X-linked task"
+}
+
 test_stale_terminal_status_overridden_by_active_run() {
   local dir state fakebin out drain_out capture_file window key pane_hash sig pid
   dir=$(make_case terminal-stale-overridden); state="$dir/state"; fakebin="$dir/fakebin"
@@ -1284,6 +1358,8 @@ test_turn_ended_not_working_surfaced
 test_working_note_not_working_surfaced
 test_actionable_signal_surfaced
 test_terminal_stale_surfaced
+test_quiet_terminal_hash_churn_absorbed_then_changed_status_surfaces
+test_quiet_terminal_does_not_hide_stopped_or_x_tasks
 test_stale_terminal_status_overridden_by_active_run
 test_nonterminal_stale_provably_working_absorbed_then_escalated
 test_wedge_escalation_marks_demand_deep_inspection_after_threshold
