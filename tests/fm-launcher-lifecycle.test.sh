@@ -18,6 +18,14 @@ set -u
 TEMPLATE="$ROOT/bin/templates/fm-launcher.command"
 assert_present "$TEMPLATE" "bin/templates/fm-launcher.command is missing"
 
+file_mode() {
+  if [ "$(uname)" = Darwin ]; then
+    stat -f %Lp "$1" 2>/dev/null
+  else
+    stat -c %a "$1" 2>/dev/null
+  fi
+}
+
 command -v herdr >/dev/null 2>&1 || { echo "skip: herdr not found"; exit 0; }
 command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; exit 0; }
 
@@ -427,7 +435,7 @@ pass "launcher: a live session lock pointing outside the journaled pane's proces
 for h in "$HOME1" "$HOME4" "$HOME4B" "$HOME5" "$HOME5B" "$HOME6" "$HOME7"; do
   LOG="$h/state/.fm-launcher.log"
   [ -f "$LOG" ] || continue
-  MODE=$(stat -f '%Lp' "$LOG" 2>/dev/null || stat -c '%a' "$LOG")
+  MODE=$(file_mode "$LOG")
   [ "$MODE" = 600 ] || fail "$LOG must be mode 0600, got $MODE"
   if grep -Eiq 'authorization|bearer|apikey|api_key|password|percentRemaining|"windows"' "$LOG"; then
     fail "$LOG contains a raw credential/quota-payload shaped string; logging must stay redacted"

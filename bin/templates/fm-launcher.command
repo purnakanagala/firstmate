@@ -256,16 +256,18 @@ trap release_lock EXIT
 # ---------------------------------------------------------------------------
 # Step 1: required binaries and versions. Pi is resolved as described above
 # (pinned absolute path, or PATH only when the config explicitly says so).
-# herdr/jq/quota-axi still come from the deterministic PATH set above.
+# herdr/jq and the ordinary quota-axi command still come from the
+# deterministic PATH set above.
 # ---------------------------------------------------------------------------
 check_tools() {
   if [ ! -x "$FM_LAUNCHER_PI_BIN" ]; then
     die "resolved Pi executable not found or not executable at $FM_LAUNCHER_PI_BIN - reinstall/repair that path before using this launcher (never falls back to a different binary)"
   fi
-  local missing=()
-  for t in herdr jq quota-axi; do
+  local missing=() quota_bin="${FM_LAUNCHER_QUOTA_BIN_OVERRIDE:-quota-axi}"
+  for t in herdr jq; do
     command -v "$t" >/dev/null 2>&1 || missing+=("$t")
   done
+  command -v "$quota_bin" >/dev/null 2>&1 || missing+=("$quota_bin")
   if [ "${#missing[@]}" -gt 0 ]; then
     die "missing required tool(s): ${missing[*]} - install them (see docs/herdr-backend.md and docs/launcher.md) before using this launcher"
   fi

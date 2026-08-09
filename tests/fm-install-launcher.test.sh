@@ -19,6 +19,14 @@ assert_present "$TEMPLATE" "bin/templates/fm-launcher.command is missing"
 assert_present "$PROTOCOL_FLOOR" "bin/herdr-min-protocol is missing"
 [ -x "$INSTALLER" ] || fail "fm-install-launcher.sh must be executable"
 
+file_mode() {
+  if [ "$(uname)" = Darwin ]; then
+    stat -f %Lp "$1" 2>/dev/null
+  else
+    stat -c %a "$1" 2>/dev/null
+  fi
+}
+
 # fake_checkout <root-dir>: build a minimal fake Firstmate checkout at
 # <root-dir> (AGENTS.md + bin/, with a symlinked templates dir and the real
 # installer copied in so it resolves the fake checkout as its own ROOT).
@@ -131,8 +139,8 @@ pass "fm-install-launcher: standalone home resolution independent of the destina
 
 # --- mode bits ----------------------------------------------------------------
 
-CMD_MODE=$(stat -f '%Lp' "$DEST4/fm-launcher.command" 2>/dev/null || stat -c '%a' "$DEST4/fm-launcher.command")
-CONF_MODE=$(stat -f '%Lp' "$DEST4/fm-launcher.conf" 2>/dev/null || stat -c '%a' "$DEST4/fm-launcher.conf")
+CMD_MODE=$(file_mode "$DEST4/fm-launcher.command")
+CONF_MODE=$(file_mode "$DEST4/fm-launcher.conf")
 [ "$CMD_MODE" = 700 ] || fail "fm-launcher.command must be mode 0700, got $CMD_MODE"
 [ "$CONF_MODE" = 600 ] || fail "fm-launcher.conf must be mode 0600, got $CONF_MODE"
 pass "fm-install-launcher: installed files carry restrictive modes"
