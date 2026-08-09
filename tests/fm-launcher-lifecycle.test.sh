@@ -183,6 +183,19 @@ pane_pi_pid() {
     | jq -r '[.result.process_info.foreground_processes[]? | select(.argv0=="pi" or .name=="pi")][0].pid // empty'
 }
 
+wait_for_pi_pid() {  # <pane-id>
+  local pane_id=$1 pid _i
+  for _i in {1..40}; do
+    pid=$(pane_pi_pid "$pane_id")
+    if [ -n "$pid" ]; then
+      printf '%s\n' "$pid"
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
 agent_count_at_cwd() {  # <cwd>
   HERDR_SESSION="$SESSION" herdr agent list --session "$SESSION" 2>/dev/null \
     | jq --arg cwd "$1" '[.result.agents[]? | select(.cwd == $cwd)] | length'
@@ -278,12 +291,10 @@ pass "launcher: missing quota percentages fail closed"
 # then confirm --check with a failing quota also refuses recovery.
 HOME4B=$(new_home s4-dead launcher-s4-dead)
 run_launcher_real "$HOME4B" "$QUOTA_OK" >/dev/null
-sleep 1
 J4B="$HOME4B/state/.fm-launcher-primary-identity"
 PANE4B=$(awk -F= '$1=="pane_id"{print $2}' "$J4B")
 [ -n "$PANE4B" ] || fail "could not read the journaled pane id for the dead-recovery scenario"
-PI_PID=$(pane_pi_pid "$PANE4B")
-[ -n "$PI_PID" ] || fail "could not read the fake pi's own renamed process pid"
+PI_PID=$(wait_for_pi_pid "$PANE4B") || fail "could not read the fake pi's own renamed process pid"
 kill "$PI_PID" 2>/dev/null
 for _i in 1 2 3 4 5 6 7 8 9 10; do
   [ "$(pane_pi_pid "$PANE4B")" != "$PI_PID" ] && break
@@ -299,10 +310,10 @@ pass "launcher: dead-primary recovery also enforces the configured quota reserve
 # (never closed/replaced), a fresh live "pi" agent reappears there.
 run_launcher_real "$HOME4B" "$QUOTA_OK" >/dev/null
 CHECK4C=""
-for _i in 1 2 3 4 5 6 7 8 9 10; do
+for _i in {1..40}; do
   CHECK4C=$(run_launcher "$HOME4B" "$QUOTA_OK" --check 2>&1)
   printf '%s' "$CHECK4C" | grep -q "alive" && break
-  sleep 0.3
+  sleep 0.25
 done
 assert_contains "$CHECK4C" "alive" "expected the recovered husk to report alive"
 J4B_AFTER=$(awk -F= '$1=="pane_id"{print $2}' "$J4B")
