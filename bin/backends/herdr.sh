@@ -93,18 +93,7 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 # shellcheck source=bin/fm-agent-process-lib.sh
 . "$FM_BACKEND_HERDR_ROOT/bin/fm-agent-process-lib.sh"
 
-FM_BACKEND_HERDR_MIN_PROTOCOL_FILE="$FM_BACKEND_HERDR_ROOT/bin/herdr-min-protocol"
-if [ ! -r "$FM_BACKEND_HERDR_MIN_PROTOCOL_FILE" ]; then
-  printf 'fm-backend: missing Herdr protocol floor: %s\n' "$FM_BACKEND_HERDR_MIN_PROTOCOL_FILE" >&2
-  return 1 2>/dev/null || exit 1
-fi
-FM_BACKEND_HERDR_MIN_PROTOCOL=$(cat "$FM_BACKEND_HERDR_MIN_PROTOCOL_FILE")
-case "$FM_BACKEND_HERDR_MIN_PROTOCOL" in
-  ''|*[!0-9]*)
-    printf 'fm-backend: invalid Herdr protocol floor in %s\n' "$FM_BACKEND_HERDR_MIN_PROTOCOL_FILE" >&2
-    return 1 2>/dev/null || exit 1
-    ;;
-esac
+FM_BACKEND_HERDR_MIN_PROTOCOL=14
 # events.subscribe (the native pane.agent_status_changed push stream) and its
 # subscription_event schema first shipped at protocol 16 (verified: herdr
 # 0.7.3). Below this, or with the events surface absent from `herdr api schema`,
