@@ -132,6 +132,7 @@ init_changed_fixture_repo() {
   : >"$repo/bin/fm-procevent-quota.sh"
   : >"$repo/bin/fm-quota-axi-lib.sh"
   : >"$repo/bin/fm-quota-choose.sh"
+  printf '14\n' >"$repo/bin/herdr-min-protocol"
   : >"$repo/bin/unmapped-source.sh"
   # A shared top-level test fixture read by two suites in different families,
   # beside a tests/ file nothing reads at all.
@@ -333,6 +334,14 @@ test_changed_dependency_selection_and_unmapped_failure() {
   assert_contains "$listed" "tests/fm-backend.test.sh" "eventwait test selects backend coverage"
   git -C "$repo" add tests/fm-backend-herdr-eventwait.test.py
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm eventwait-change
+
+  printf '15\n' >"$repo/bin/herdr-min-protocol"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  assert_contains "$listed" "tests/fm-backend-herdr-smoke.test.sh" "protocol floor selects real Herdr coverage"
+  assert_contains "$listed" "tests/fm-backend.test.sh" "protocol floor selects backend dispatch coverage"
+  assert_contains "$listed" "tests/fm-brief.test.sh" "protocol floor selects contract coverage"
+  git -C "$repo" add bin/herdr-min-protocol
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm protocol-floor-change
 
   printf '\n' >>"$repo/bin/fm-supervisor-target-lib.sh"
   listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
@@ -989,6 +998,8 @@ test_exclude_family() {
   listed=$("$RUNNER" --list --family real-herdr-gated)
   printf '%s\n' "$listed" | grep -Fq 'tests/fm-backend-herdr-smoke.test.sh' \
     || fail "family real-herdr-gated must list smoke test"
+  printf '%s\n' "$listed" | grep -Fq 'tests/fm-launcher-lifecycle.test.sh' \
+    || fail "family real-herdr-gated must list launcher lifecycle test"
   pass "exclude-family drops the named primary family after selection"
 }
 
@@ -1067,8 +1078,12 @@ test_portable_shard_union_and_coverage_guard() {
   # No herdr in portable lanes.
   printf '%s\n' "$s1" "$s2" "$serial" | grep -Fq 'tests/fm-backend-herdr-smoke.test.sh' \
     && fail "portable lanes must not include real-herdr-gated smoke"
+  printf '%s\n' "$s1" "$s2" "$serial" | grep -Fq 'tests/fm-launcher-lifecycle.test.sh' \
+    && fail "portable lanes must not include real-herdr-gated launcher lifecycle"
   printf '%s\n' "$herdr" | grep -Fq 'tests/fm-backend-herdr-smoke.test.sh' \
     || fail "herdr family must include smoke"
+  printf '%s\n' "$herdr" | grep -Fq 'tests/fm-launcher-lifecycle.test.sh' \
+    || fail "herdr family must include launcher lifecycle"
   out=$("$RUNNER" --check-coverage)
   assert_contains "$out" "FM_TEST_COVERAGE ok" "coverage guard success marker"
   all_count=$("$RUNNER" --list --all | wc -l | tr -d ' ')

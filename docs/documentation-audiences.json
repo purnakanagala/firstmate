@@ -341,6 +341,10 @@
       "audience": "operator-example"
     },
     {
+      "path": "docs/examples/launcher.conf",
+      "audience": "operator-example"
+    },
+    {
       "path": "docs/examples/process-event-extension/file-signal.mjs",
       "audience": "operator-example"
     },
@@ -382,6 +386,10 @@
     },
     {
       "path": "docs/herdr-backend.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "docs/launcher.md",
       "audience": "operator-current"
     },
     {

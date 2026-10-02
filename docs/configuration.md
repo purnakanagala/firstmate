@@ -552,6 +552,12 @@ An absent file means `auto`, i.e. default-on on macOS: the alarm exists precisel
 A missing or failing channel logs and falls through to the next, never crashing the daemon.
 See [`wedge-alarm.md`](wedge-alarm.md) for the current channel reference, [`verification/supervision.md`](verification/supervision.md#wedge-alarm-channels) for active evidence, and [`examples/wedge-alarm`](examples/wedge-alarm) for a copyable config.
 
+## One-command macOS launcher (config/launcher.conf)
+
+`bin/fm-install-launcher.sh <destination-directory>` installs a personal, clickable one-command launcher for this exact checkout that starts or attaches a Herdr-backed Pi primary.
+It reads the captain-specific model, reasoning level, Pi executable, quota provider, and optional reserve percent from `config/launcher.conf` (local, gitignored) and refuses to install without every required field set explicitly.
+See [`launcher.md`](launcher.md) for the current field reference, safety boundaries, and usage, and [`examples/launcher.conf`](examples/launcher.conf) for a copyable config.
+
 ## Trace context propagation (config/trace-context / FM_TRACE_CONTEXT)
 
 The optional local, gitignored `config/trace-context` presence flag enables default-off native W3C trace-context propagation.
