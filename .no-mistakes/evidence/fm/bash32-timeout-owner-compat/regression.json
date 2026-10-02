@@ -1,0 +1,18 @@
+[
+  {
+    "case": "baseline",
+    "command": "fm_exec_timed 5 1 /bin/bash -c \"echo bash32-ok\"",
+    "shell": "/bin/bash 3.2.57",
+    "status": 127,
+    "stdout": "",
+    "stderr": "/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3Y4N4RA5GB2ETYWDE73CTSA/.test-timeout-tmp/baseline-timeout.sh: line 224: BASHPID: unbound variable\n"
+  },
+  {
+    "case": "fixed",
+    "command": "fm_exec_timed 5 1 /bin/bash -c \"echo bash32-ok\"",
+    "shell": "/bin/bash 3.2.57",
+    "status": 0,
+    "stdout": "bash32-ok\n",
+    "stderr": ""
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "shell": "GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)",
+    "scenario": "output-status",
+    "status": 7,
+    "elapsed_seconds": 0.129,
+    "stdout": "worker-started\n",
+    "stderr": "worker-diagnostic\n"
+  },
+  {
+    "shell": "GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)",
+    "scenario": "deadline",
+    "status": 124,
+    "elapsed_seconds": 1.297,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "shell": "GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)",
+    "scenario": "grace",
+    "status": 124,
+    "elapsed_seconds": 2.23,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "shell": "GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)",
+    "scenario": "explicit-owner-dies-before-deadline",
+    "owner_pid": 82422,
+    "status": 143,
+    "elapsed_seconds": 0.249,
+    "stdout": "owner-command-started\n",
+    "stderr": ""
+  },
+  {
+    "shell": "GNU bash, version 5.2.37(1)-release (aarch64-apple-darwin25.6.0)",
+    "scenario": "output-status",
+    "status": 7,
+    "elapsed_seconds": 0.119,
+    "stdout": "worker-started\n",
+    "stderr": "worker-diagnostic\n"
+  },
+  {
+    "shell": "GNU bash, version 5.2.37(1)-release (aarch64-apple-darwin25.6.0)",
+    "scenario": "deadline",
+    "status": 124,
+    "elapsed_seconds": 1.312,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "shell": "GNU bash, version 5.2.37(1)-release (aarch64-apple-darwin25.6.0)",
+    "scenario": "grace",
+    "status": 124,
+    "elapsed_seconds": 2.196,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "shell": "GNU bash, version 5.2.37(1)-release (aarch64-apple-darwin25.6.0)",
+    "scenario": "explicit-owner-dies-before-deadline",
+    "owner_pid": 82467,
+    "status": 143,
+    "elapsed_seconds": 0.39,
+    "stdout": "owner-command-started\n",
+    "stderr": ""
+  }
+]

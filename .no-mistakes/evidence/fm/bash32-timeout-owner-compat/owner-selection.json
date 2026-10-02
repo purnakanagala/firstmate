@@ -1,0 +1,38 @@
+[
+  {
+    "shell": "/bin/bash",
+    "mode": "direct",
+    "caller_pid": 83945,
+    "watchdog_pid": 83945,
+    "observed_owner_pid": 83945,
+    "expected_owner_pid": 83945,
+    "status": 0
+  },
+  {
+    "shell": "/bin/bash",
+    "mode": "subshell",
+    "caller_pid": 85051,
+    "watchdog_pid": 85057,
+    "observed_owner_pid": 85051,
+    "expected_owner_pid": 85051,
+    "status": 0
+  },
+  {
+    "shell": "/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3Y4N4RA5GB2ETYWDE73CTSA/.test-timeout-tmp/bash-5.2.37/bash",
+    "mode": "direct",
+    "caller_pid": 85254,
+    "watchdog_pid": 85254,
+    "observed_owner_pid": 83913,
+    "expected_owner_pid": 83913,
+    "status": 0
+  },
+  {
+    "shell": "/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3Y4N4RA5GB2ETYWDE73CTSA/.test-timeout-tmp/bash-5.2.37/bash",
+    "mode": "subshell",
+    "caller_pid": 85258,
+    "watchdog_pid": 85259,
+    "observed_owner_pid": 85258,
+    "expected_owner_pid": 85258,
+    "status": 0
+  }
+]
