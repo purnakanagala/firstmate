@@ -64,6 +64,21 @@ test_passes_the_command_status_and_output_through() {
   pass "fm_exec_timed passes a command's status and output through unchanged"
 }
 
+# macOS still ships Bash 3.2, which has no BASHPID variable. The timeout owner
+# fallback must preserve the caller's $$ identity instead of failing under -u.
+test_bash32_without_bashpid_runs_a_bounded_command() {
+  local out rc=0
+  if ! /bin/bash --version 2>/dev/null | head -1 | grep -q 'version 3\.2'; then
+    pass "fm_exec_timed supports Bash 3.2 without BASHPID (skipped: /bin/bash is not 3.2)"
+    return 0
+  fi
+  out=$(/bin/bash -u -c '. "$1"; fm_exec_timed 5 1 /bin/bash -c "echo bash32-ok"' \
+    _ "$ROOT/bin/fm-timeout-lib.sh" 2>&1) || rc=$?
+  [ "$rc" -eq 0 ] || fail "Bash 3.2 could not start the bounded command (rc=$rc: $out)"
+  [ "$out" = bash32-ok ] || fail "Bash 3.2 bounded command printed '$out'"
+  pass "fm_exec_timed supports Bash 3.2 without BASHPID"
+}
+
 # A command that honors TERM ends at the bound, long before the grace would
 # have forced it, and is gone afterwards.
 test_term_ends_a_cooperative_command_at_the_bound() {
@@ -109,7 +124,7 @@ test_the_bound_replaces_the_calling_shell() {
     rm -f "$dir/caller" "$dir/parent"
     (
       . "$ROOT/bin/fm-timeout-lib.sh"
-      printf '%s\n' "$BASHPID" > "$dir/caller"
+      /bin/sh -c 'printf "%s\n" "$PPID"' > "$dir/caller"
       PATH=$path fm_exec_timed 5 1 bash -c 'echo "$PPID" > "$1"' _ "$dir/parent"
     ) || fail "the bounded probe failed under PATH=$path"
     caller=$(cat "$dir/caller")
@@ -211,7 +226,7 @@ test_an_owner_that_dies_during_startup_ends_the_command() {
   PATH=$PERL_ONLY bash -c '
     . "$1/bin/fm-timeout-lib.sh"
     (
-      echo "$BASHPID" > "$2/watchdog"
+      /bin/sh -c "echo \$PPID" > "$2/watchdog"
       while kill -0 "$$" 2>/dev/null; do sleep 0.05; done
       fm_exec_timed 60 1 bash -c "exec sleep 300"
     ) >/dev/null 2>&1 &
@@ -328,6 +343,7 @@ test_run_timed_passes_a_natural_exit_through_a_fired_bound() {
 }
 
 test_passes_the_command_status_and_output_through
+test_bash32_without_bashpid_runs_a_bounded_command
 test_run_timed_reports_the_bound_when_the_wrapper_records_a_signal_death
 test_run_timed_passes_a_natural_exit_through_a_fired_bound
 test_term_ends_a_cooperative_command_at_the_bound
