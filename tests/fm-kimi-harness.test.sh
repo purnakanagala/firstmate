@@ -848,8 +848,8 @@ test_kimi_refuses_a_backend_without_a_viewport_capture() {
   read_spawn_record "$rec"
   fm_fake_exit0 "$FAKEBIN_DIR" cmux
   rc=0
-  out=$(FM_BACKEND=cmux run_spawn \
-    "$CASE_DIR" "$HOME_DIR" "$PROJ_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id") || rc=$?
+  out=$(run_spawn \
+    "$CASE_DIR" "$HOME_DIR" "$PROJ_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" --backend cmux) || rc=$?
   [ "$rc" -ne 0 ] || fail "a Kimi spawn on a backend without a viewport capture should refuse"
   assert_contains "$out" "backend 'cmux' has no verified viewport-bounded capture" \
     "Kimi refusal did not name the backend and the missing viewport capability"
