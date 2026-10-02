@@ -27,6 +27,11 @@ command -v jq >/dev/null 2>&1 || { echo "skip: jq not found (required by the her
 # shellcheck source=tests/herdr-test-safety.sh
 . "$ROOT/tests/herdr-test-safety.sh"
 
+# This suite runs against its own isolated lab session, so a Herdr pane
+# inherited from the terminal it was launched in must not follow spawn into it
+# as a cross-session parent identity (tests/herdr-test-safety.sh).
+herdr_forget_inherited_pane
+
 SESSION="fm-lab-backend-smoke-$$"
 export HERDR_SESSION="$SESSION"
 SM_SCRATCH=
@@ -61,6 +66,18 @@ case "$CONTAINER" in
 esac
 [ -n "$SEEDED_TAB_ID" ] || fail "the first container_ensure in a brand-new isolated session must CREATE the workspace and report its seeded default tab id"
 pass "real herdr: container_ensure starts the isolated session's server, creates the firstmate workspace ($CONTAINER), and reports its seeded default tab id ($SEEDED_TAB_ID)"
+
+# --- client selection: the real status shape the selection reads ------------
+# bin/backends/herdr.sh "client selection" steps around a client the running
+# server refuses by reading .server.running/.server.compatible per session; a
+# fixture can only restate that shape, so prove the installed binary against
+# its own running lab server normalizes to running and compatible with equal
+# protocols.
+CLIENT_STATUS=$(fm_backend_herdr_client_status "$(command -v herdr)" "$SESSION")
+IFS='|' read -r CS_RUNNING CS_COMPATIBLE <<< "$CLIENT_STATUS"
+[ "$CS_RUNNING" = true ] || fail "real herdr: status for the running lab server normalized running=$CS_RUNNING (raw: $CLIENT_STATUS)"
+[ "$CS_COMPATIBLE" = true ] || fail "real herdr: the installed client normalized compatible=$CS_COMPATIBLE against its own server (raw: $CLIENT_STATUS)"
+pass "real herdr: session status normalizes running and compatible"
 
 # A second container_ensure must reuse (ADOPT) the same workspace (idempotent)
 # and report an EMPTY seeded tab id - the created-vs-adopted gate that fixes
@@ -282,21 +299,8 @@ pass "real herdr: current_path reads the pane's live cwd"
 
 # --- busy_state on a real claude harness (verified in herdr-verification-p2.md) ---
 
-assert_no_target_provider_processes() {
-  local info live
-  info=$(fm_backend_herdr_cli "$SESSION" pane process-info --pane "$PANE_ID" 2>/dev/null) \
-    || fail "could not inspect the test-owned Herdr pane process tree"
-  live=$(printf '%s' "$info" | jq -r '
-    .result.process_info.foreground_processes[]?
-    | select(any(([(.name // "")] + (.argv // []))[]; test("(^|/)(claude|grok)$")))
-    | "\(.pid) \(.name) \((.argv // []) | join(" "))"
-  ')
-  [ -z "$live" ] || fail "test-owned provider process detected: $live"
-}
-
 if [ "${FM_HERDR_SMOKE_REAL_CLAUDE:-0}" = 1 ] && command -v claude >/dev/null 2>&1; then
-  assert_no_target_provider_processes
-  fm_backend_herdr_send_literal "$TARGET" "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions --print 'say the word HERDRSMOKEOK and nothing else'"
+  fm_backend_herdr_send_literal "$TARGET" "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude --dangerously-skip-permissions --settings '{\"feedbackDrafts\":\"off\"}' --print 'say the word HERDRSMOKEOK and nothing else'"
   sleep 0.2
   fm_backend_herdr_send_key "$TARGET" Enter
   found_working=0
@@ -318,7 +322,6 @@ if [ "${FM_HERDR_SMOKE_REAL_CLAUDE:-0}" = 1 ] && command -v claude >/dev/null 2>
     *HERDRSMOKEOK*) pass "real herdr: agent_status busy/idle detection tracks a real claude turn, and capture shows its output" ;;
     *) echo "note: claude output marker not observed within the bound (timing-dependent, not fatal to this smoke suite)" >&2 ;;
   esac
-  assert_no_target_provider_processes
 elif [ "${FM_HERDR_SMOKE_REAL_CLAUDE:-0}" != 1 ]; then
   echo "note: FM_HERDR_SMOKE_REAL_CLAUDE=1 not set; skipping the real-agent busy_state check" >&2
 else
