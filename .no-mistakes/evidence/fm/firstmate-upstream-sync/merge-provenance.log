@@ -1,0 +1,27 @@
+$ git log -3 --format=%h %p %s
+4816747 dcf9508 Keep upstream Herdr adapter portability
+dcf9508 751696f Resolve upstream sync for launcher compatibility
+751696f 7700ff6 8690c41 Merge kunchenguid/firstmate at 8690c411
+exit=0
+$ git merge-base --is-ancestor 8690c4117a298ee870f0f72f571c72b846b4c5fb HEAD
+exit=0
+$ git merge-base --is-ancestor ef8d085 HEAD
+exit=1
+$ git diff --stat 8690c4117a298ee870f0f72f571c72b846b4c5fb HEAD
+ .github/workflows/ci.yml            |   1 +
+ README.md                           |   1 +
+ bin/fm-install-launcher.sh          | 112 +++++
+ bin/fm-test-run.sh                  |   4 +-
+ bin/herdr-min-protocol              |   1 +
+ bin/templates/fm-launcher.command   | 896 ++++++++++++++++++++++++++++++++++++
+ docs/configuration.md               |   6 +
+ docs/documentation-audiences.json   |   8 +
+ docs/examples/launcher.conf         |  37 ++
+ docs/launcher.md                    |  46 ++
+ docs/scripts.md                     |   1 +
+ tests/fm-install-launcher.test.sh   | 182 ++++++++
+ tests/fm-kimi-harness.test.sh       |   5 +-
+ tests/fm-launcher-lifecycle.test.sh | 457 ++++++++++++++++++
+ tests/fm-test-run.test.sh           |  15 +
+ 15 files changed, 1768 insertions(+), 4 deletions(-)
+exit=0

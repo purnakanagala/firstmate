@@ -1,0 +1,4 @@
+/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/fm-herdr-lab.sh: line 187: fm_herdr_lab_viewer_timeout_seconds: readonly variable
+/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/fm-herdr-lab.sh: line 188: fm_herdr_lab_viewer_launcher_grace_seconds: readonly variable
+ok - launcher: absent state creates a fresh primary with home resolved from config, independent of cwd
+not ok - could not find the launcher's own workspace by label

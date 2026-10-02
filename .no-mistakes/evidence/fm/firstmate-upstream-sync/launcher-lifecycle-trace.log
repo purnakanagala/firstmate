@@ -1,0 +1,426 @@
++ set -u
+++ dirname tests/fm-launcher-lifecycle.test.sh
++ . tests/lib.sh
+++ '[' -n '' ']'
+++ FM_TEST_LIB_SOURCED=1
+++ umask 022
++++ dirname tests/lib.sh
+++ . tests/git-config-helpers.sh
++++ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
++++ GIT_CONFIG_GLOBAL=/dev/null
++++ GIT_CONFIG_NOSYSTEM=1
+++ export FM_GATE_REFUSE_BYPASS=1
+++ FM_GATE_REFUSE_BYPASS=1
+++ export FM_TEST_SEAM=1
+++ FM_TEST_SEAM=1
+++ unset FM_TASK_ID
+++ unset TASKS_AXI_FILE TASKS_AXI_BACKEND
+++++ dirname tests/lib.sh
++++ cd tests/..
++++ pwd
+++ ROOT=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT
+++ FM_TEST_CLEANUP_DIRS=()
++++ mktemp /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-cleanup.10223.XXXXXX
+++ FM_TEST_CLEANUP_REGISTRY=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-cleanup.10223.IvmVmj
++++ fm_test_pid_identity 10223
++++ local pid=10223
++++ FM_STATE_OVERRIDE=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp
++++ bash -c '. "$1"; fm_pid_identity "$2"' _ /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/fm-wake-lib.sh 10223
+++ FM_TEST_OWNER_IDENTITY='Thu Oct  1 22:53:40 2026     /bin/bash -x tests/fm-launcher-lifecycle.test.sh'
++++ mktemp /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-procevent.10223.XXXXXX
+++ FM_TEST_PROCEVENT_REGISTRY=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-procevent.10223.KuLHwg
++++ mktemp /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-watcher.10223.XXXXXX
+++ FM_TEST_WATCHER_REGISTRY=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-watcher.10223.h8W6H9
+++ FM_TEST_STUB_MAX_BLOCK_SECONDS=120
+++ export FM_TEST_STUB_MAX_BLOCK_SECONDS
+++ trap fm_test_cleanup EXIT
+++ trap 'fm_test_cleanup; exit 130' INT
+++ trap 'fm_test_cleanup; exit 143' TERM
+++ trap 'fm_test_cleanup; exit 129' HUP
+++ trap 'fm_test_cleanup; exit 131' QUIT
+++ FM_TEST_ORPHAN_MAX_AGE_SECONDS=3600
+++ '[' 0 '!=' 1 ']'
+++ fm_test_reap_orphans
+++ local marker dir mtime now owner_pid owner_identity current_identity
++++ date +%s
+++ now=1790909620
+++ for marker in '"${TMPDIR:-/tmp}"/fm-*/.fm-test-fixture'
+++ '[' -e /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-base-path-sans.ISGRzC/.fm-test-fixture ']'
++++ sed -n 1p /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-base-path-sans.ISGRzC/.fm-test-fixture
+++ owner_pid=76320
++++ sed -n '2,$p' /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-base-path-sans.ISGRzC/.fm-test-fixture
+++ owner_identity='Thu Oct  1 22:53:19 2026     /bin/bash tests/fm-brief.test.sh'
+++ case "$owner_pid" in
++++ fm_test_pid_identity 76320
+++ current_identity='Thu Oct  1 22:53:19 2026     /bin/bash tests/fm-brief.test.sh'
+++ '[' -n 'Thu Oct  1 22:53:19 2026     /bin/bash tests/fm-brief.test.sh' ']'
+++ '[' 'Thu Oct  1 22:53:19 2026     /bin/bash tests/fm-brief.test.sh' = 'Thu Oct  1 22:53:19 2026     /bin/bash tests/fm-brief.test.sh' ']'
+++ continue
+++ for marker in '"${TMPDIR:-/tmp}"/fm-*/.fm-test-fixture'
+++ '[' -e /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-brief.BQKrfQ/.fm-test-fixture ']'
++++ sed -n 1p /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-brief.BQKrfQ/.fm-test-fixture
+++ owner_pid=76320
++++ sed -n '2,$p' /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-brief.BQKrfQ/.fm-test-fixture
+++ owner_identity='Thu Oct  1 22:53:19 2026     /bin/bash tests/fm-brief.test.sh'
+++ case "$owner_pid" in
++++ fm_test_pid_identity 76320
+++ current_identity='Thu Oct  1 22:53:19 2026     /bin/bash tests/fm-brief.test.sh'
+++ '[' -n 'Thu Oct  1 22:53:19 2026     /bin/bash tests/fm-brief.test.sh' ']'
+++ '[' 'Thu Oct  1 22:53:19 2026     /bin/bash tests/fm-brief.test.sh' = 'Thu Oct  1 22:53:19 2026     /bin/bash tests/fm-brief.test.sh' ']'
+++ continue
+++ for marker in '"${TMPDIR:-/tmp}"/fm-*/.fm-test-fixture'
+++ '[' -e /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-test-run-non-lane-schedule.I9CYdE/.fm-test-fixture ']'
++++ sed -n 1p /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-test-run-non-lane-schedule.I9CYdE/.fm-test-fixture
+++ owner_pid=17173
++++ sed -n '2,$p' /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-test-run-non-lane-schedule.I9CYdE/.fm-test-fixture
+++ owner_identity='Thu Oct  1 22:52:11 2026     /bin/bash tests/fm-test-run.test.sh'
+++ case "$owner_pid" in
++++ fm_test_pid_identity 17173
+++ current_identity='Thu Oct  1 22:52:11 2026     /bin/bash tests/fm-test-run.test.sh'
+++ '[' -n 'Thu Oct  1 22:52:11 2026     /bin/bash tests/fm-test-run.test.sh' ']'
+++ '[' 'Thu Oct  1 22:52:11 2026     /bin/bash tests/fm-test-run.test.sh' = 'Thu Oct  1 22:52:11 2026     /bin/bash tests/fm-test-run.test.sh' ']'
+++ continue
+++ for marker in '"${TMPDIR:-/tmp}"/fm-*/.fm-test-fixture'
+++ '[' -e /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-test-run-proven-schedule.SbmjpT/.fm-test-fixture ']'
++++ sed -n 1p /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-test-run-proven-schedule.SbmjpT/.fm-test-fixture
+++ owner_pid=17173
++++ sed -n '2,$p' /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-test-run-proven-schedule.SbmjpT/.fm-test-fixture
+++ owner_identity='Thu Oct  1 22:52:11 2026     /bin/bash tests/fm-test-run.test.sh'
+++ case "$owner_pid" in
++++ fm_test_pid_identity 17173
+++ current_identity='Thu Oct  1 22:52:11 2026     /bin/bash tests/fm-test-run.test.sh'
+++ '[' -n 'Thu Oct  1 22:52:11 2026     /bin/bash tests/fm-test-run.test.sh' ']'
+++ '[' 'Thu Oct  1 22:52:11 2026     /bin/bash tests/fm-test-run.test.sh' = 'Thu Oct  1 22:52:11 2026     /bin/bash tests/fm-test-run.test.sh' ']'
+++ continue
++ TEMPLATE=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/templates/fm-launcher.command
++ assert_present /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/templates/fm-launcher.command 'bin/templates/fm-launcher.command is missing'
++ '[' -e /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/templates/fm-launcher.command ']'
++ command -v herdr
++ command -v jq
++ . /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/tests/herdr-test-safety.sh
+++ set -u
++++ dirname /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/tests/herdr-test-safety.sh
+++ . /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/tests/git-config-helpers.sh
++++ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
++++ GIT_CONFIG_GLOBAL=/dev/null
++++ GIT_CONFIG_NOSYSTEM=1
+++ export FM_GATE_REFUSE_BYPASS=1
+++ FM_GATE_REFUSE_BYPASS=1
+++++ dirname /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/tests/herdr-test-safety.sh
++++ cd /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/tests/..
++++ pwd
+++ HERDR_TEST_SAFETY_DIR=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT
+++ . /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/fm-herdr-lab.sh
++++ set -u
++++ readonly fm_herdr_lab_viewer_timeout_seconds=5
++++ fm_herdr_lab_viewer_timeout_seconds=5
++++ readonly fm_herdr_lab_viewer_launcher_grace_seconds=6
++++ fm_herdr_lab_viewer_launcher_grace_seconds=6
++++ '[' /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/fm-herdr-lab.sh = tests/fm-launcher-lifecycle.test.sh ']'
++ . /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/fm-herdr-lab.sh
+++ set -u
+++ readonly fm_herdr_lab_viewer_timeout_seconds=5
+++ fm_herdr_lab_viewer_timeout_seconds=5
+/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/fm-herdr-lab.sh: line 187: fm_herdr_lab_viewer_timeout_seconds: readonly variable
+++ readonly fm_herdr_lab_viewer_launcher_grace_seconds=6
+++ fm_herdr_lab_viewer_launcher_grace_seconds=6
+/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/fm-herdr-lab.sh: line 188: fm_herdr_lab_viewer_launcher_grace_seconds: readonly variable
+++ '[' /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/fm-herdr-lab.sh = tests/fm-launcher-lifecycle.test.sh ']'
++ SESSION=fm-lab-launcher-10223
++ LAB_SCRATCH=
++ trap cleanup_all EXIT
++ fm_herdr_lab_provision fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223 sessions tripwire running attempt server_pid max_attempts timeout_seconds
++ fm_herdr_lab_validate_name fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223
++ [[ fm-lab-launcher-10223 =~ ^fm-lab-[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
++ return 0
++ command -v herdr
++ command -v jq
+++ fm_herdr_lab_session_list fm-lab-launcher-10223
++ sessions='{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"}]}'
++ printf %s '{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"}]}'
++ jq -e --arg name fm-lab-launcher-10223 '.sessions[]? | select(.name == $name)'
++ fm_herdr_lab_prepare fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223 sessions state_dir tripwire
++ fm_herdr_lab_validate_name fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223
++ [[ fm-lab-launcher-10223 =~ ^fm-lab-[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
++ return 0
++ command -v herdr
++ command -v jq
+++ fm_herdr_lab_session_list fm-lab-launcher-10223
++ sessions='{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"}]}'
++ printf %s '{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"}]}'
++ jq -e --arg name fm-lab-launcher-10223 '.sessions[]? | select(.name == $name)'
+++ fm_herdr_lab_state_dir
+++ printf %s /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state
++ state_dir=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state
+++ fm_herdr_lab_tripwire_path fm-lab-launcher-10223
++++ fm_herdr_lab_state_dir
++++ printf %s /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state
+++ printf %s/%s.fleet-state.json /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state fm-lab-launcher-10223
++ tripwire=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.fleet-state.json
++ mkdir -p /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state
++ '[' '!' -e /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.fleet-state.json ']'
++ fm_herdr_lab_fleet_state fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223 sessions snapshot
+++ fm_herdr_lab_session_list fm-lab-launcher-10223
++ sessions='{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"}]}'
+++ printf %s '{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"}]}'
+++ jq -c '
+    [.sessions[]? | select(.default == true)]
+    | if length == 1 and .[0].name == "default" and .[0].running == true
+      then .[0] | {name, default, running, socket_path}
+      else empty
+      end
+  '
++ snapshot='{"name":"default","default":true,"running":true,"socket_path":".test-phase/herdrroot/herdr/herdr.sock"}'
++ '[' -n '{"name":"default","default":true,"running":true,"socket_path":".test-phase/herdrroot/herdr/herdr.sock"}' ']'
++ printf '%s\n' '{"name":"default","default":true,"running":true,"socket_path":".test-phase/herdrroot/herdr/herdr.sock"}'
++ server_pid=10743
++ attempt=0
++ max_attempts=300
++ timeout_seconds=60
++ '[' 0 -lt 300 ']'
++ fm_herdr_lab_raw fm-lab-launcher-10223 server
+++ fm_herdr_lab_cli fm-lab-launcher-10223 status --json
+++ jq -r '.server.running // false'
++ running=true
++ '[' true = true ']'
++ fm_herdr_lab_refuse_if_default fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223 info flag
++ fm_herdr_lab_validate_name fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223
++ [[ fm-lab-launcher-10223 =~ ^fm-lab-[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
++ return 0
+++ fm_herdr_lab_session_list fm-lab-launcher-10223
++ info='{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"},{"default":false,"name":"fm-lab-launcher-10223","running":true,"session_dir":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223","socket_path":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223/herdr.sock"}]}'
+++ printf %s '{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"},{"default":false,"name":"fm-lab-launcher-10223","running":true,"session_dir":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223","socket_path":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223/herdr.sock"}]}'
+++ jq -r --arg name fm-lab-launcher-10223 '.sessions[]? | select(.name == $name) | .default'
++ flag=false
++ '[' false = false ']'
++ return 0
++ return 0
+++ mktemp -d /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.XXXXXX
++ LAB_SCRATCH=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6
++ FAKE_PI=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/pi
++ cat
++ chmod +x /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/pi
++ QUOTA_OK=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
++ cat
++ chmod +x /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
++ QUOTA_LOW=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-low
++ cat
++ chmod +x /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-low
++ QUOTA_MISSING_PERCENT=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-missing-percent
++ cat
++ chmod +x /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-missing-percent
++ QUOTA_FAIL=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-fail
++ cat
++ chmod +x /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-fail
++ QUOTA_POISON_MARKER=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-poison-invoked
++ QUOTA_POISON=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-poison
++ cat
++ chmod +x /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-poison
+++ new_home s1 launcher-s1
+++ local label=s1 wslabel=launcher-s1 home
+++ home=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1
+++ mkdir -p /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/bin /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/state
+++ cp /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/herdr-min-protocol /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/bin/herdr-min-protocol
+++ :
++++ cd /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1
++++ pwd -P
+++ home=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1
+++ cat
+++ printf '%s\n' /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1
++ HOME1=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1
++ cd /tmp
++ run_launcher_real /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1 /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
++ local home=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1 quotabin=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok out rc
+++ run_launcher /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1 /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
++ out='++ local home=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1 quotabin=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
+++ shift 2
+++ FM_LAUNCHER_CONF_OVERRIDE=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/fm-launcher.conf
+++ FM_LAUNCHER_SESSION_OVERRIDE=fm-lab-launcher-10223
+++ FM_LAUNCHER_QUOTA_BIN_OVERRIDE=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
+++ /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/templates/fm-launcher.command
+[?1006l[?1016l[?1015l[?1005l[?1003l[?1002l[?1000l[?1049l
+thread '\''main'\'' (225828460) panicked at /Users/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ratatui-0.30.0/src/init.rs:299:16:
+failed to initialize terminal: Os { code: 6, kind: Uncategorized, message: "Device not configured" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: could not attach the Herdr client (exit 101). The primary is running/selected - attach manually with:
+  herdr session attach fm-lab-launcher-10223'
++ rc=1
++ '[' 1 -ne 0 ']'
++ printf %s '++ local home=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1 quotabin=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
+++ shift 2
+++ FM_LAUNCHER_CONF_OVERRIDE=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/fm-launcher.conf
+++ FM_LAUNCHER_SESSION_OVERRIDE=fm-lab-launcher-10223
+++ FM_LAUNCHER_QUOTA_BIN_OVERRIDE=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
+++ /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/templates/fm-launcher.command
+[?1006l[?1016l[?1015l[?1005l[?1003l[?1002l[?1000l[?1049l
+thread '\''main'\'' (225828460) panicked at /Users/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ratatui-0.30.0/src/init.rs:299:16:
+failed to initialize terminal: Os { code: 6, kind: Uncategorized, message: "Device not configured" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: could not attach the Herdr client (exit 101). The primary is running/selected - attach manually with:
+  herdr session attach fm-lab-launcher-10223'
++ grep -q 'could not attach the Herdr client'
++ printf %s '++ local home=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1 quotabin=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
+++ shift 2
+++ FM_LAUNCHER_CONF_OVERRIDE=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/fm-launcher.conf
+++ FM_LAUNCHER_SESSION_OVERRIDE=fm-lab-launcher-10223
+++ FM_LAUNCHER_QUOTA_BIN_OVERRIDE=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
+++ /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/templates/fm-launcher.command
+[?1006l[?1016l[?1015l[?1005l[?1003l[?1002l[?1000l[?1049l
+thread '\''main'\'' (225828460) panicked at /Users/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ratatui-0.30.0/src/init.rs:299:16:
+failed to initialize terminal: Os { code: 6, kind: Uncategorized, message: "Device not configured" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: could not attach the Herdr client (exit 101). The primary is running/selected - attach manually with:
+  herdr session attach fm-lab-launcher-10223'
++ sleep 1
++ JOURNAL1=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/state/.fm-launcher-primary-identity
++ '[' -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/state/.fm-launcher-primary-identity ']'
++ assert_grep home=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1 /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/state/.fm-launcher-primary-identity 'journal must record the exact configured home, not a cwd-derived one'
++ grep -F -- home=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1 /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/state/.fm-launcher-primary-identity
+++ run_launcher /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1 /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok --check
+++ local home=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1 quotabin=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
+++ shift 2
+++ FM_LAUNCHER_CONF_OVERRIDE=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1/fm-launcher.conf
+++ FM_LAUNCHER_SESSION_OVERRIDE=fm-lab-launcher-10223
+++ FM_LAUNCHER_QUOTA_BIN_OVERRIDE=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/quota-ok
+++ /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/bin/templates/fm-launcher.command --check
++ CHECK1='check: OK - prerequisites satisfied; exact primary is alive (would attach on next run)'
++ assert_contains 'check: OK - prerequisites satisfied; exact primary is alive (would attach on next run)' alive 'primary should be alive immediately after a real create'
++ case "$1" in
++ :
++ pass 'launcher: absent state creates a fresh primary with home resolved from config, independent of cwd'
++ printf 'ok - %s\n' 'launcher: absent state creates a fresh primary with home resolved from config, independent of cwd'
+ok - launcher: absent state creates a fresh primary with home resolved from config, independent of cwd
++ HOME1_CWD=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6/home-s1
+++ HERDR_SESSION=fm-lab-launcher-10223
+++ herdr workspace list --session fm-lab-launcher-10223
++ WSLIST='{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[]}}'
+++ printf %s '{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[]}}'
+++ jq -r --arg l launcher-s1 '.result.workspaces[]? | select(.label==$l) | .workspace_id'
++ WSID1=
++ '[' -n '' ']'
++ fail 'could not find the launcher'\''s own workspace by label'
++ printf 'not ok - %s\n' 'could not find the launcher'\''s own workspace by label'
+not ok - could not find the launcher's own workspace by label
++ exit 1
++ cleanup_all
++ '[' -n /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6 ']'
++ rm -rf /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/fm-launcher-lifecycle.Rhy4X6
++ herdr_safe_stop_and_delete fm-lab-launcher-10223
++ fm_herdr_lab_teardown fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223 tripwire sessions delete_status=0
++ fm_herdr_lab_validate_name fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223
++ [[ fm-lab-launcher-10223 =~ ^fm-lab-[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
++ return 0
+++ fm_herdr_lab_tripwire_path fm-lab-launcher-10223
++++ fm_herdr_lab_state_dir
++++ printf %s /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state
+++ printf %s/%s.fleet-state.json /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state fm-lab-launcher-10223
++ tripwire=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.fleet-state.json
++ '[' -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.fleet-state.json ']'
++ fm_herdr_lab_viewer_stop fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223 record log role waited attempt reason timeout=5
++ fm_herdr_lab_validate_name fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223
++ [[ fm-lab-launcher-10223 =~ ^fm-lab-[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
++ return 0
+++ fm_herdr_lab_viewer_record_path fm-lab-launcher-10223
++++ fm_herdr_lab_state_dir
++++ printf %s /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state
+++ printf %s/%s.viewer /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state fm-lab-launcher-10223
++ record=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.viewer
+++ fm_herdr_lab_viewer_log_path fm-lab-launcher-10223
++++ fm_herdr_lab_state_dir
++++ printf %s /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state
+++ printf %s/%s.viewer.log /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state fm-lab-launcher-10223
++ log=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.viewer.log
++ '[' -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.viewer ']'
++ return 0
+++ fm_herdr_lab_session_list fm-lab-launcher-10223
++ sessions='{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"},{"default":false,"name":"fm-lab-launcher-10223","running":true,"session_dir":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223","socket_path":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223/herdr.sock"}]}'
++ printf %s '{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"},{"default":false,"name":"fm-lab-launcher-10223","running":true,"session_dir":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223","socket_path":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223/herdr.sock"}]}'
++ jq -e --arg name fm-lab-launcher-10223 '.sessions[]? | select(.name == $name)'
++ fm_herdr_lab_stop fm-lab-launcher-10223
++ sleep 0.5
++ fm_herdr_lab_refuse_if_default fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223 info flag
++ fm_herdr_lab_validate_name fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223
++ [[ fm-lab-launcher-10223 =~ ^fm-lab-[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
++ return 0
+++ fm_herdr_lab_session_list fm-lab-launcher-10223
++ info='{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"},{"default":false,"name":"fm-lab-launcher-10223","running":false,"session_dir":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223","socket_path":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223/herdr.sock"}]}'
+++ printf %s '{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"},{"default":false,"name":"fm-lab-launcher-10223","running":false,"session_dir":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223","socket_path":".test-phase/herdrroot/herdr/sessions/fm-lab-launcher-10223/herdr.sock"}]}'
+++ jq -r --arg name fm-lab-launcher-10223 '.sessions[]? | select(.name == $name) | .default'
++ flag=false
++ '[' false = false ']'
++ return 0
++ fm_herdr_lab_raw fm-lab-launcher-10223 session delete fm-lab-launcher-10223 --json
+++ fm_herdr_lab_session_list fm-lab-launcher-10223
++ sessions='{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"}]}'
++ printf %s '{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"}]}'
++ jq -e --arg name fm-lab-launcher-10223 '.sessions[]? | select(.name == $name)'
++ fm_herdr_lab_verify_tripwire fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223 tripwire
++ fm_herdr_lab_check_tripwire fm-lab-launcher-10223
++ local name=fm-lab-launcher-10223 tripwire before after
+++ fm_herdr_lab_tripwire_path fm-lab-launcher-10223
++++ fm_herdr_lab_state_dir
++++ printf %s /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state
+++ printf %s/%s.fleet-state.json /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state fm-lab-launcher-10223
++ tripwire=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.fleet-state.json
++ '[' -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.fleet-state.json ']'
+++ cat /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.fleet-state.json
++ before='{"name":"default","default":true,"running":true,"socket_path":".test-phase/herdrroot/herdr/herdr.sock"}'
+++ fm_herdr_lab_fleet_state fm-lab-launcher-10223
+++ local name=fm-lab-launcher-10223 sessions snapshot
++++ fm_herdr_lab_session_list fm-lab-launcher-10223
+++ sessions='{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"}]}'
++++ printf %s '{"sessions":[{"default":true,"name":"default","running":true,"session_dir":".test-phase/herdrroot/herdr","socket_path":".test-phase/herdrroot/herdr/herdr.sock"}]}'
++++ jq -c '
+    [.sessions[]? | select(.default == true)]
+    | if length == 1 and .[0].name == "default" and .[0].running == true
+      then .[0] | {name, default, running, socket_path}
+      else empty
+      end
+  '
+++ snapshot='{"name":"default","default":true,"running":true,"socket_path":".test-phase/herdrroot/herdr/herdr.sock"}'
+++ '[' -n '{"name":"default","default":true,"running":true,"socket_path":".test-phase/herdrroot/herdr/herdr.sock"}' ']'
+++ printf '%s\n' '{"name":"default","default":true,"running":true,"socket_path":".test-phase/herdrroot/herdr/herdr.sock"}'
++ after='{"name":"default","default":true,"running":true,"socket_path":".test-phase/herdrroot/herdr/herdr.sock"}'
++ '[' '{"name":"default","default":true,"running":true,"socket_path":".test-phase/herdrroot/herdr/herdr.sock"}' = '{"name":"default","default":true,"running":true,"socket_path":".test-phase/herdrroot/herdr/herdr.sock"}' ']'
+++ fm_herdr_lab_tripwire_path fm-lab-launcher-10223
++++ fm_herdr_lab_state_dir
++++ printf %s /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state
+++ printf %s/%s.fleet-state.json /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state fm-lab-launcher-10223
++ tripwire=/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.fleet-state.json
++ rm -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/lab-state/fm-lab-launcher-10223.fleet-state.json
++ fm_test_cleanup
++ local d
++ fm_test_reap_watchers
++ local state lock_home 'seen=
+'
++ '[' -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-watcher.10223.h8W6H9 ']'
++ IFS=
++ read -r state
++ rm -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-watcher.10223.h8W6H9
++ fm_test_reap_procevent_homes
++ local home claim_root 'seen=
+'
++ '[' -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-procevent.10223.KuLHwg ']'
++ IFS='	'
++ read -r home claim_root
++ rm -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-procevent.10223.KuLHwg
++ for d in '"${FM_TEST_CLEANUP_DIRS[@]:-}"'
++ '[' -n '' ']'
++ '[' -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-cleanup.10223.IvmVmj ']'
++ IFS=
++ read -r d
++ rm -f /Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M3X85D5GKR3K3MCW7N1RTWGT/.test-phase/tmp/.fm-test-cleanup.10223.IvmVmj
