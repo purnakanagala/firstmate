@@ -35,8 +35,11 @@
 #       be signalled (an owner torn down by an outer group-kill cannot leave
 #       the bounded subtree orphaned behind it). The owner is captured before
 #       the watchdog starts: FM_EXEC_TIMED_OWNER_PID when the caller names it,
-#       else the calling script ($$) when fm_exec_timed runs in a subshell,
-#       else the shell's parent. The escalation starts once that owner is gone
+#       else the calling script ($$). When BASHPID is available and matches
+#       that owner, the shell's parent is used instead to avoid watching the
+#       watchdog itself. Without BASHPID (Bash 3.2), the explicit owner or $$
+#       is retained; in a subshell, $$ still identifies the calling script.
+#       The escalation starts once that owner is gone
 #       or the watchdog's parent changes, so an owner that dies while the
 #       watchdog is still starting is detected too. The timeout/gtimeout
 #       fallback does not track the owner: it bounds the command only by its
