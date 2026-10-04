@@ -5214,12 +5214,21 @@ if (JSON.stringify(actualRow.render(100)) !== JSON.stringify(stockRow.render(100
 }
 
 pi.events.emit("firstmate:calm-presentation", { active: true, stockExportRendering: true });
-const stockHtml = createToolHtmlRenderer({ getToolDefinition: () => stockDefinition, theme, cwd: process.cwd() });
-const actualHtml = createToolHtmlRenderer({ getToolDefinition: () => actualDefinition, theme, cwd: process.cwd() });
+// Pi 1.0.2 renamed the lookup; exercise the callback on either API so an
+// unrecognized dependency cannot masquerade as the intended structured fallback.
+let stockLookups = 0;
+let actualLookups = 0;
+const getStockRenderers = () => { stockLookups++; return stockDefinition; };
+const getActualRenderers = () => { actualLookups++; return actualDefinition; };
+const stockHtml = createToolHtmlRenderer({ getToolDefinition: getStockRenderers, getToolRenderers: getStockRenderers, theme, cwd: process.cwd() });
+const actualHtml = createToolHtmlRenderer({ getToolDefinition: getActualRenderers, getToolRenderers: getActualRenderers, theme, cwd: process.cwd() });
 const stockCall = stockHtml.renderCall("stock-html", "fm_branch_outcomes", args);
 const actualCall = actualHtml.renderCall("actual-html", "fm_branch_outcomes", args);
 const stockResult = stockHtml.renderResult("stock-html", "fm_branch_outcomes", result.content, result.details, false);
 const actualResult = actualHtml.renderResult("actual-html", "fm_branch_outcomes", result.content, result.details, false);
+if (stockLookups !== 2 || actualLookups !== 2) {
+  throw new Error("HTML export did not look up both call and result renderers");
+}
 if (actualCall !== undefined || actualResult !== undefined || stockCall !== undefined || stockResult !== undefined) {
   throw new Error("stock export rendering did not delegate to Pi's structured fallback");
 }

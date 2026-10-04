@@ -125,36 +125,60 @@ assert_contains "$OUT" 'reason=prefix-changed' 'the same-size rewrite was not na
 assert_contains "$OUT" 'to_offset=11' 'the break did not report the current size'
 pass 'a same-size in-place rewrite breaks continuity as prefix-changed'
 
-# A same-size rewrite of the same inode within the snapshot's own second leaves
-# size, inode, device, and whole-second mtime and ctime unchanged: only the
-# subsecond stat key can tell it moved. Each attempt starts on a second
-# boundary, rewrites once the first capture ran, and is retried only if the
-# rewrite still crossed into the next ctime second.
-ctime_second() { perl -e 'print +(stat shift)[10]' "$1"; }
-SAME_SECOND=
-for _ in 1 2 3; do
-  perl -MTime::HiRes=time,sleep -e 'sleep(1 - (time - int(time)))'
-  printf 'alpha\nbeta\n' > "$DELTA_HOME/$DELTA_LOG_REL"
-  BEFORE_SECOND=$(ctime_second "$DELTA_HOME/$DELTA_LOG_REL")
-  : > "$EXEC_LOG"
-  FM_TEST_EXEC_LOG="$EXEC_LOG" PATH="$DELTA_SHIM:/usr/bin:/bin" \
-    run_reader 11 "$PREFIX_SHA" 2 > "$TMP_ROOT/same-second.out" &
-  READER_PID=$!
-  for _ in $(seq 1 50); do grep -qx perl "$EXEC_LOG" && break; sleep 0.01; done
-  sleep 0.15
-  printf 'OMEGA\nbeta\n' > "$DELTA_HOME/$DELTA_LOG_REL"
-  AFTER_SECOND=$(ctime_second "$DELTA_HOME/$DELTA_LOG_REL")
-  RC=0
-  wait "$READER_PID" || RC=$?
-  [ "$BEFORE_SECOND" = "$AFTER_SECOND" ] || continue
-  SAME_SECOND=1
-  [ "$RC" -eq 0 ] || fail "the same-second rewrite read exited $RC instead of 0"
-  OUT=$(<"$TMP_ROOT/same-second.out")
-  assert_contains "$OUT" 'reason=prefix-changed' 'a same-second same-size rewrite was not detected'
-  break
+# Hold the whole-second stat fields fixed while rewriting the real log after
+# its first real snapshot finishes. Only the selected subsecond field changes;
+# this tests the stat gate without racing the scheduler to a second boundary.
+# Exercise both stat dialects, and the conservative fallback when either
+# timestamp has no subsecond precision.
+REWRITE_SHIM="$TMP_ROOT/rewrite-shim"
+mkdir -p "$REWRITE_SHIM"
+cat > "$REWRITE_SHIM/stat" <<'SH'
+#!/bin/sh
+case "$1:$2" in
+  -c:%s) [ "$FM_TEST_STAT_DIALECT" = gnu ] || exit 1; printf '11\n'; exit 0 ;;
+  '-c:%s:%.9Y:%.9Z:%i:%d') [ "$FM_TEST_STAT_DIALECT" = gnu ] || exit 1 ;;
+  '-f:%z:%Fm:%Fc:%i:%d') [ "$FM_TEST_STAT_DIALECT" = bsd ] || exit 1 ;;
+  *) exit 1 ;;
+esac
+mtime=1700000000.100000000
+ctime=1700000000.100000000
+case "$FM_TEST_STAT_FIELD" in
+  mtime) [ ! -f "$FM_TEST_REWRITTEN" ] || mtime=1700000000.200000000 ;;
+  ctime) [ ! -f "$FM_TEST_REWRITTEN" ] || ctime=1700000000.200000000 ;;
+  coarse-mtime) mtime=1700000000.000000000 ;;
+  coarse-ctime) ctime=1700000000.000000000 ;;
+esac
+printf '11:%s:%s:42:1\n' "$mtime" "$ctime"
+SH
+cat > "$REWRITE_SHIM/perl" <<'SH'
+#!/bin/sh
+"$FM_TEST_REAL_PERL" "$@" || exit $?
+printf 'snapshot\n' >> "$FM_TEST_SNAPSHOTS"
+if [ ! -f "$FM_TEST_REWRITTEN" ]; then
+  printf 'OMEGA\nbeta\n' > "$FM_TEST_REWRITE_LOG"
+  : > "$FM_TEST_REWRITTEN"
+fi
+SH
+chmod +x "$REWRITE_SHIM/stat" "$REWRITE_SHIM/perl"
+REAL_PERL=$(command -v perl)
+for DIALECT in gnu bsd; do
+  for FIELD in mtime ctime coarse-mtime coarse-ctime; do
+    printf 'alpha\nbeta\n' > "$DELTA_HOME/$DELTA_LOG_REL"
+    rm -f "$TMP_ROOT/rewritten"
+    : > "$TMP_ROOT/snapshots"
+    FM_TEST_STAT_DIALECT="$DIALECT" FM_TEST_STAT_FIELD="$FIELD" \
+      FM_TEST_REWRITTEN="$TMP_ROOT/rewritten" FM_TEST_SNAPSHOTS="$TMP_ROOT/snapshots" \
+      FM_TEST_REAL_PERL="$REAL_PERL" FM_TEST_REWRITE_LOG="$DELTA_HOME/$DELTA_LOG_REL" \
+      PATH="$REWRITE_SHIM:/usr/bin:/bin" \
+      run_reader 11 "$PREFIX_SHA" 10 > "$TMP_ROOT/same-second.out" \
+      || fail "$DIALECT $FIELD rewrite read did not exit 0"
+    OUT=$(<"$TMP_ROOT/same-second.out")
+    assert_contains "$OUT" 'reason=prefix-changed' "$DIALECT $FIELD rewrite was not detected"
+    assert_contains "$OUT" "to_prefix_sha256=$(sha 'OMEGA\nbeta\n')" 'the break did not hash the rewritten prefix'
+    [ "$(wc -l < "$TMP_ROOT/snapshots")" -eq 2 ] || fail 'rewrite did not require two real snapshots'
+  done
 done
-[ -n "$SAME_SECOND" ] || fail 'no attempt landed the rewrite in the same ctime second'
-pass 'a same-second same-size rewrite of the same inode breaks continuity'
+pass 'same-second rewrites break continuity with either subsecond field or coarse timestamps on GNU and BSD stat'
 
 # A log that disappears mid-wait breaks as missing only for a nonzero cursor.
 printf 'alpha\nbeta\n' > "$DELTA_HOME/$DELTA_LOG_REL"
