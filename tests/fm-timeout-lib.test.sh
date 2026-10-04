@@ -46,6 +46,19 @@ run_timed() {
   )
 }
 
+test_unset_bashpid_does_not_abort_owner_detection() {
+  local out rc=0
+  out=$(bash -c '
+    unset BASHPID
+    set -u
+    . "$1"
+    PATH="$2" fm_exec_timed 5 1 bash -c "printf ready"
+  ' _ "$ROOT/bin/fm-timeout-lib.sh" "$PERL_ONLY") || rc=$?
+  [ "$rc" -eq 0 ] || fail "an unset BASHPID aborted the timeout runner (rc=$rc, output=$out)"
+  [ "$out" = ready ] || fail "the timeout runner lost command output with BASHPID unset: $out"
+  pass "fm_exec_timed tolerates an unset BASHPID under nounset"
+}
+
 wait_for_file() {  # <path>
   local i=0
   while [ ! -s "$1" ]; do
@@ -327,6 +340,7 @@ test_run_timed_passes_a_natural_exit_through_a_fired_bound() {
   pass 'fm_run_timed passes a natural exit through when the bound fired after completion'
 }
 
+test_unset_bashpid_does_not_abort_owner_detection
 test_passes_the_command_status_and_output_through
 test_run_timed_reports_the_bound_when_the_wrapper_records_a_signal_death
 test_run_timed_passes_a_natural_exit_through_a_fired_bound
