@@ -1,0 +1,73 @@
+[
+  {
+    "scenario": "Before fix: unset BASHPID under nounset aborts",
+    "exit": 127,
+    "stdout": "",
+    "stderr": "/Users/purnakanagala/.no-mistakes/worktrees/9b879ca45491/01M4283YJCPA09EHCC4AYMF046/.timeout-live-1w0xvzye/base.sh: line 224: BASHPID: unbound variable\n",
+    "elapsed_seconds": 0.004
+  },
+  {
+    "scenario": "Unset BASHPID preserves output and status: direct",
+    "exit": 7,
+    "stdout": "dispatched\n",
+    "stderr": "diagnostic\n",
+    "elapsed_seconds": 0.274
+  },
+  {
+    "scenario": "Unset BASHPID preserves output and status: subshell",
+    "exit": 7,
+    "stdout": "dispatched\n",
+    "stderr": "diagnostic\n",
+    "elapsed_seconds": 0.289
+  },
+  {
+    "scenario": "Unset BASHPID enforces deadline: exec sleep 30",
+    "exit": 124,
+    "stdout": "",
+    "stderr": "",
+    "elapsed_seconds": 1.147
+  },
+  {
+    "scenario": "Unset BASHPID enforces deadline: trap \"\" TERM; exec sleep 30",
+    "exit": 124,
+    "stdout": "",
+    "stderr": "",
+    "elapsed_seconds": 2.266
+  },
+  {
+    "scenario": "Owner dies startup, BASHPID default (Bash 3.2: unavailable)",
+    "owner_exit": 0,
+    "stdout": "bounded-child-started\n",
+    "stderr": "",
+    "watchdog_pid": 90452,
+    "watchdog_gone": true,
+    "elapsed_seconds": 1.268
+  },
+  {
+    "scenario": "Owner dies running, BASHPID default (Bash 3.2: unavailable)",
+    "owner_exit": 0,
+    "stdout": "bounded-child-started\n",
+    "stderr": "",
+    "watchdog_pid": 90456,
+    "watchdog_gone": true,
+    "elapsed_seconds": 0.619
+  },
+  {
+    "scenario": "Owner dies startup, BASHPID unset",
+    "owner_exit": 0,
+    "stdout": "bounded-child-started\n",
+    "stderr": "",
+    "watchdog_pid": 90460,
+    "watchdog_gone": true,
+    "elapsed_seconds": 1.235
+  },
+  {
+    "scenario": "Owner dies running, BASHPID unset",
+    "owner_exit": 0,
+    "stdout": "bounded-child-started\n",
+    "stderr": "",
+    "watchdog_pid": 90479,
+    "watchdog_gone": true,
+    "elapsed_seconds": 0.515
+  }
+]

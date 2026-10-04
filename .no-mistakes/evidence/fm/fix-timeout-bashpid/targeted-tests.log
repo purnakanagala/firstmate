@@ -1,0 +1,9 @@
+ok - fm_exec_timed tolerates an unset BASHPID under nounset
+ok - fm_exec_timed passes a command's status and output through unchanged
+_: line 3: 85715 Terminated: 15          "$@"
+ok - fm_run_timed reports 124 when the bound TERMs a read whose wrapper recorded 143
+ok - fm_run_timed passes a natural exit through when the bound fired after completion
+ok - fm_exec_timed sends TERM at the bound and a cooperative command ends there
+ok - fm_exec_timed kills a TERM-ignoring command once the grace has passed
+tests/fm-timeout-lib.test.sh: line 125: BASHPID: unbound variable
+not ok - the bounded probe failed under PATH=/opt/homebrew/Caskroom/codex/0.160.0/codex-path:/Users/purnakanagala/.local/bin:/Library/Frameworks/Python.framework/Versions/3.14/bin:/Library/Frameworks/Python.framework/Versions/3.14/bin:/Users/purnakanagala/.local/bin:/Library/Frameworks/Python.framework/Versions/3.12/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/opt/homebrew/bin:/Users/purnakanagala/.codex/tmp/arg0/codex-arg0zi9BY2:/opt/homebrew/Caskroom/codex/0.160.0/codex-path:/Users/purnakanagala/.local/bin:/Users/purnakanagala/anaconda3/bin:/Users/purnakanagala/anaconda3/condabin:/Library/Frameworks/Python.framework/Versions/3.14/bin:/Library/Frameworks/Python.framework/Versions/3.12/bin:/Users/purnakanagala/go/bin:/Users/purnakanagala/.cargo/bin:/Users/purnakanagala/bin:/opt/homebrew/sbin:/usr/local/sbin
