@@ -221,8 +221,8 @@ fm_exec_timed() {  # <seconds> <grace-seconds> <command...>
     exit 125
   fi
   owner=${FM_EXEC_TIMED_OWNER_PID:-$$}
-  if [ "$owner" = "${BASHPID:-}" ] ||
-    { [ -z "${BASHPID:-}" ] && [ "$BASH_SUBSHELL" -eq 0 ] && [ "$owner" = "$$" ]; }; then
+  if [ "$owner" = "${BASHPID:-$$}" ] &&
+    { [ -n "${BASHPID:-}" ] || [ "$BASH_SUBSHELL" -eq 0 ]; }; then
     owner=$PPID
   fi
   unset FM_EXEC_TIMED_OWNER_PID
