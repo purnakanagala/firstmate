@@ -221,8 +221,10 @@ fm_exec_timed() {  # <seconds> <grace-seconds> <command...>
     exit 125
   fi
   owner=${FM_EXEC_TIMED_OWNER_PID:-$$}
-  # Some compatible callers source this library with BASHPID unset under nounset.
-  [ "$owner" != "${BASHPID:-$$}" ] || owner=$PPID
+  if [ "$owner" = "${BASHPID:-}" ] ||
+    { [ -z "${BASHPID:-}" ] && [ "$BASH_SUBSHELL" -eq 0 ] && [ "$owner" = "$$" ]; }; then
+    owner=$PPID
+  fi
   unset FM_EXEC_TIMED_OWNER_PID
   if command -v perl >/dev/null 2>&1; then
     exec perl -MPOSIX=WNOHANG,setpgid -MTime::HiRes=time -e '
